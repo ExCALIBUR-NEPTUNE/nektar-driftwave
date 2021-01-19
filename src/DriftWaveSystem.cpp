@@ -34,7 +34,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "DriftWaveSystem.h"
-#include <MultiRegions/ContField2D.h>
+#include <MultiRegions/ContField.h>
 
 namespace Nektar
 {
@@ -58,7 +58,7 @@ void DriftWaveSystem::v_InitObject()
     AdvectionSystem::v_InitObject();
 
     // Redefine phi field so that it is continuous for Poisson solve.
-    m_fields[2] = MemoryManager<MultiRegions::ContField2D>
+    m_fields[2] = MemoryManager<MultiRegions::ContField>
         ::AllocateSharedPtr(
             m_session, m_graph, m_session->GetVariable(2), true, true);
 
@@ -156,7 +156,7 @@ void DriftWaveSystem::ExplicitTimeInt(
 
     // Solve for phi
     m_fields[2]->HelmSolve(inarray[0], m_fields[2]->UpdateCoeffs(),
-                           NullFlagList, factors);
+                           factors);
     m_fields[2]->BwdTrans (m_fields[2]->GetCoeffs(),
                            m_fields[2]->UpdatePhys());
 
@@ -193,7 +193,7 @@ void DriftWaveSystem::DoOdeProjection(
     Array<OneD,       Array<OneD, NekDouble> > &outarray,
     const NekDouble time)
 {
-    int nvariables = inarray.num_elements(), npoints = GetNpoints();
+    int nvariables = inarray.size(), npoints = GetNpoints();
     SetBoundaryConditions(time);
 
     for (int i = 0; i < nvariables; ++i)
@@ -206,15 +206,15 @@ void DriftWaveSystem::GetFluxVector(
     const Array<OneD, Array<OneD, NekDouble> >               &physfield,
           Array<OneD, Array<OneD, Array<OneD, NekDouble> > > &flux)
 {
-    ASSERTL1(flux[0].num_elements() == m_driftVel.num_elements(),
+    ASSERTL1(flux[0].size() == m_driftVel.size(),
              "Dimension of flux array and velocity array do not match");
 
     int i , j;
-    int nq = physfield[0].num_elements();
+    int nq = physfield[0].size();
 
-    for (i = 0; i < flux.num_elements(); ++i)
+    for (i = 0; i < flux.size(); ++i)
     {
-        for (j = 0; j < flux[0].num_elements(); ++j)
+        for (j = 0; j < flux[0].size(); ++j)
         {
             Vmath::Vmul(nq, physfield[i], 1, m_driftVel[j], 1,
                         flux[i][j], 1);
@@ -237,7 +237,7 @@ Array<OneD, NekDouble> &DriftWaveSystem::GetNormalVelocity()
     // Reset the normal velocity
     Vmath::Zero(nTracePts, m_traceVn, 1);
 
-    for (i = 0; i < m_driftVel.num_elements(); ++i)
+    for (i = 0; i < m_driftVel.size(); ++i)
     {
         m_fields[0]->ExtractTracePhys(m_driftVel[i], tmp);
 

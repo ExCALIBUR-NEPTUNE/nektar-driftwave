@@ -55,7 +55,7 @@ public:
         const SpatialDomains::MeshGraphSharedPtr& graph)
     {
         SolverUtils::EquationSystemSharedPtr p = MemoryManager<
-            AdvectionSystem>::AllocateSharedPtr(session, graph);
+            DriftWaveSystem>::AllocateSharedPtr(session, graph);
         p->InitObject();
         return p;
     }
