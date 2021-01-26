@@ -29,7 +29,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //
-// Description: Image warping framework solver
+// Description: Driver for the drift wave solver.
 //
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -46,10 +46,10 @@ int main(int argc, char *argv[])
         // Create session reader.
         auto session = LibUtilities::SessionReader::CreateInstance(argc, argv);
 
-        // Create MeshGraph
+        // Read the mesh and create a MeshGraph object.
         auto graph = SpatialDomains::MeshGraph::Read(session);
 
-        // Create driver
+        // Create driver.
         std::string driverName;
         session->LoadSolverInfo("Driver", driverName, "Standard");
         auto drv = GetDriverFactory().CreateInstance(driverName, session, graph);

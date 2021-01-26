@@ -33,8 +33,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef NEKTAR_SOLVERS_IMAGEWARPINGSOLVER_EQUATIONSYSTEMS_DRIFTWAVESYSTEM_H
-#define NEKTAR_SOLVERS_IMAGEWARPINGSOLVER_EQUATIONSYSTEMS_DRIFTWAVESYSTEM_H
+#ifndef NEKTAR_DRIFTWAVESYSTEM_H
+#define NEKTAR_DRIFTWAVESYSTEM_H
 
 #include <SolverUtils/AdvectionSystem.h>
 #include <SolverUtils/RiemannSolvers/RiemannSolver.h>
@@ -44,12 +44,18 @@ using namespace Nektar::SolverUtils;
 namespace Nektar
 {
 
+/**
+ * @brief An equation system for the drift-wave solver.
+ */
 class DriftWaveSystem : public AdvectionSystem
 {
 public:
+    // Friend class to allow the memory manager to allocate shared pointers of
+    // this class.
     friend class MemoryManager<DriftWaveSystem>;
 
-    /// Creates an instance of this class
+    /// Creates an instance of this class. This static method is registered with
+    /// a factory.
     static SolverUtils::EquationSystemSharedPtr create(
         const LibUtilities::SessionReaderSharedPtr& session,
         const SpatialDomains::MeshGraphSharedPtr& graph)
@@ -59,19 +65,34 @@ public:
         p->InitObject();
         return p;
     }
-    /// Name of class
+
+    /// Name of class, used to statically initialise a function pointer for the
+    /// create method above.
     static std::string className;
 
-    virtual ~DriftWaveSystem();
+    /// Default destructor.
+    virtual ~DriftWaveSystem() = default;
 
 protected:
+    /// Storage for the drift velocity. The outer index is dimension, and inner
+    /// index the solution nodes (in physical space).
     Array<OneD, Array<OneD, NekDouble> > m_driftVel;
+    /// Storage for the dot product of drift velocity with element edge normals,
+    /// required for the DG formulation.
     Array<OneD, NekDouble>               m_traceVn;
+    /// \f$ \alpha \f$ constant for the Hasegawa-Wakatani equations.
     NekDouble                            m_alpha;
+    /// \f$ \kappa \f$ constant for the Hasegawa-Wakatani equations.
     NekDouble                            m_kappa;
+    /// A SolverUtils::Advection object, which abstracts the calculation of the
+    /// \f$ \nabla\cdot\mathbf{F} \f$ operator using different approaches.
     AdvectionSharedPtr                   m_advObject;
+    /// A Riemann solver object to solve numerical fluxes arising from DG: in
+    /// this case a simple upwind.
     RiemannSolverSharedPtr               m_riemannSolver;
 
+    /// Protected constructor. Since we use a factory pattern, objects should be
+    /// constructed via the SolverUtils::EquationSystem factory.
     DriftWaveSystem(
         const LibUtilities::SessionReaderSharedPtr& session,
         const SpatialDomains::MeshGraphSharedPtr& graph);
@@ -91,10 +112,8 @@ protected:
     Array<OneD, NekDouble> &GetNormalVelocity();
 
     virtual void v_InitObject();
-
-    // Print Summary
-    virtual void v_GenerateSummary(SolverUtils::SummaryList& s);
 };
+
 }
 
 #endif
