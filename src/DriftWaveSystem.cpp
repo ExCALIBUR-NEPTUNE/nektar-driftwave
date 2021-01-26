@@ -194,7 +194,7 @@ void DriftWaveSystem::ExplicitTimeInt(
     const Array<OneD, const Array<OneD,NekDouble> > &inarray,
           Array<OneD,       Array<OneD,NekDouble> > &outarray,
     const NekDouble time)
-
+{
     // nPts below corresponds to the total number of solution/integration
     // points: i.e. number of elements * quadrature points per element.
     int i, nPts = GetNpoints();
