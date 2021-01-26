@@ -1,5 +1,7 @@
 FROM nektarpp/nektar-dev:2510247d
 
+ARG INSTALL_PREFIX=/usr/local
+
 USER root
 COPY .  /root/tmp
 COPY example $INSTALL_PREFIX/share/doc/nektar++/driftwave-solver
