@@ -5,41 +5,20 @@ on:
     branches: [ master ]
 
 jobs:
-  push:
+  buildpush:
+    name: Build Docker imagegit
     runs-on: ubuntu-latest
     steps:
-      -
-        name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@master
-
-      -
-        name: Cache Docker layers
-        uses: actions/cache@v2
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      -
-        name: Login to DockerHub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-
-      -
-        name: Build and push
-        id: docker_build
-        uses: docker/build-push-action@v2
-        with:
-          builder: ${{ steps.buildx.outputs.name }}
-          context: ./
-          file: ./Dockerfile
-          push: true
-          tags: dmoxey/nektar-driftwave:latest
-
-      -
-        name: Image digest
-        run: echo ${{ steps.docker_build.outputs.digest }}
+     - name: Setup Docker Buildx
+       uses: docker/setup-buildx-action@v1
+     - name: Login to DockerHub
+       uses: docker/login-action@v1
+       with:
+         username: ${{ secrets.DOCKER_HUB_USERNAME }}
+         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+     - name: Build and push
+       id: docker_build
+       uses: docker/build-push-action@v2
+       with:
+         push: true
+         tags: dmoxey/nektar-driftwave:latest
