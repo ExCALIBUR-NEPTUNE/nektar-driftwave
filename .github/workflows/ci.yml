@@ -6,7 +6,7 @@ on:
 
 jobs:
   buildpush:
-    name: Build Docker imagegit
+    name: Build Docker image
     runs-on: ubuntu-latest
     steps:
      - name: Setup Docker Buildx

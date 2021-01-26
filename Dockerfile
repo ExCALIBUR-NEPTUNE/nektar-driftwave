@@ -2,9 +2,10 @@ FROM nektarpp/nektar-dev:2510247d
 
 USER root
 COPY .  /root/tmp
+COPY example $INSTALL_PREFIX/share/doc/nektar++/driftwave-solver
 
-RUN cd /root/tmp && mkdir build && \
-    cmake -DNektar++_DIR=/usr/local/lib64/nektar++/cmake -DCMAKE_INSTALL_PREFIX=/usr/local .. && \
+RUN cd /root/tmp && mkdir build && cd build && \
+    cmake -DNektar++_DIR=$INSTALL_PREFIX/lib64/nektar++/cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX .. && \
     make install && cd /root && rm -Rf /root/tmp
 
 USER nektar
