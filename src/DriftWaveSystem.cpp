@@ -304,6 +304,8 @@ Array<OneD, NekDouble> &DriftWaveSystem::GetNormalVelocity()
     // Reset the normal velocity
     Vmath::Zero(nTracePts, m_traceVn, 1);
 
+    // Compute dot product of velocity along trace with trace normals. Store in
+    // m_traceVn.
     for (i = 0; i < m_driftVel.size(); ++i)
     {
         m_fields[0]->ExtractTracePhys(m_driftVel[i], tmp);
