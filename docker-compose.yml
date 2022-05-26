@@ -1,0 +1,9 @@
+version: '3.9'
+
+services:
+  nektar-driftwave:
+    image: nektar-driftwave:0.0.1
+    build: .
+    container_name: nektar-driftwave
+    # Keep container alive
+    entrypoint: "tail -f /dev/null"
