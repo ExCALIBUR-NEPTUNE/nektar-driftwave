@@ -53,9 +53,9 @@ DriftWaveSystem::DriftWaveSystem(
 {
 }
 
-void DriftWaveSystem::v_InitObject()
+void DriftWaveSystem::v_InitObject(bool DeclareField)
 {
-    AdvectionSystem::v_InitObject();
+    AdvectionSystem::v_InitObject(DeclareField);
 
     // Since we are starting from a setup where each field is defined to be a
     // discontinuous field (and thus support DG), the first thing we do is to
