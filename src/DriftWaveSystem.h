@@ -111,7 +111,7 @@ protected:
 
     Array<OneD, NekDouble> &GetNormalVelocity();
 
-    virtual void v_InitObject();
+    virtual void v_InitObject(bool DeclareField = true) override;
 };
 
 }
