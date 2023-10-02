@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<NEKTAR>
+    <COLLECTIONS DEFAULT="auto" />
+    <EXPANSIONS>
+        <TIMELEVEL VALUE="0">
+            <E COMPOSITE="C[0]" NUMMODES="5" TYPE="MODIFIED" FIELDS="zeta,n,phi" />
+        </TIMELEVEL>
+        <TIMELEVEL VALUE="1">
+            <E COMPOSITE="C[0]" NUMMODES="3" TYPE="MODIFIED" FIELDS="zeta,n,phi" />
+        </TIMELEVEL>
+    </EXPANSIONS>
+
+    <CONDITIONS>
+        <SOLVERINFO>
+            <TIMELEVEL VALUE="0">
+                <I PROPERTY="EQTYPE" VALUE="DriftWaveSystem" />
+                <I PROPERTY="Projection" VALUE="DisContinuous" />
+                <I PROPERTY="TimeIntegrationMethod" VALUE="ClassicalRungeKutta4" />
+                <I PROPERTY="Driver"     VALUE="Parareal" />
+            </TIMELEVEL>
+            <TIMELEVEL VALUE="1">
+                <I PROPERTY="EQTYPE" VALUE="DriftWaveSystem" />
+                <I PROPERTY="Projection" VALUE="DisContinuous" />
+                <I PROPERTY="TimeIntegrationMethod" VALUE="RungeKutta2" />
+            </TIMELEVEL>
+        </SOLVERINFO>
+
+        <PARAMETERS>
+            <TIMELEVEL VALUE="0">
+                <P> NumSteps       = 204800       </P>
+                <P> TimeStep       = 0.0002       </P>
+                <P> IO_InfoSteps   = 0            </P>
+                <P> IO_CheckSteps  = NumSteps/64  </P>
+                <P> s              = 2.0          </P>
+                <P> kappa          = 1.0          </P>
+                <P> alpha          = 2.0          </P>
+                <P> PITIterMax     = 8            </P>
+                <P> PITToler       = 1e-15        </P>
+            </TIMELEVEL>
+            <TIMELEVEL VALUE="1">
+                <P> NumSteps       = 81920        </P>
+                <P> TimeStep       = 0.0005       </P>
+                <P> s              = 2.0          </P>
+                <P> kappa          = 1.0          </P>
+                <P> alpha          = 2.0          </P>
+            </TIMELEVEL>
+        </PARAMETERS>
+
+        <VARIABLES>
+            <V ID="0"> zeta </V>
+            <V ID="1"> n </V>
+            <V ID="2"> phi </V>
+        </VARIABLES>
+
+        <BOUNDARYREGIONS>
+            <B ID="0"> C[1] </B>
+            <B ID="1"> C[2] </B>
+            <B ID="2"> C[3] </B>
+            <B ID="3"> C[4] </B>
+        </BOUNDARYREGIONS>
+
+        <BOUNDARYCONDITIONS>
+            <REGION REF="0">
+                <P VAR="zeta" VALUE="[2]" />
+                <P VAR="n"    VALUE="[2]" />
+                <P VAR="phi"  VALUE="[2]" />
+            </REGION>
+            <REGION REF="1">
+                <P VAR="zeta" VALUE="[3]" />
+                <P VAR="n"    VALUE="[3]" />
+                <P VAR="phi"  VALUE="[3]" />
+            </REGION>
+            <REGION REF="2">
+                <P VAR="zeta" VALUE="[0]" />
+                <P VAR="n"    VALUE="[0]" />
+                <P VAR="phi"  VALUE="[0]" />
+            </REGION>
+            <REGION REF="3">
+                <P VAR="zeta" VALUE="[1]" />
+                <P VAR="n"    VALUE="[1]" />
+                <P VAR="phi"  VALUE="[1]" />
+            </REGION>
+        </BOUNDARYCONDITIONS>
+
+        <FUNCTION NAME="InitialConditions">
+            <E VAR="n"    VALUE="exp((-x*x-y*y)/(s*s))" />
+            <E VAR="zeta" VALUE="4*exp((-x*x-y*y)/(s*s))*(-s*s+x*x+y*y)/s^4" />
+            <E VAR="phi"  VALUE="exp(-(x*x+y*y)/(s*s))" />
+        </FUNCTION>
+    </CONDITIONS>
+</NEKTAR>
