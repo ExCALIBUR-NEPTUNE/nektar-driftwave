@@ -30,7 +30,7 @@
                 <P> NumSteps       = 204800       </P>
                 <P> TimeStep       = 0.0002       </P>
                 <P> IO_InfoSteps   = 0            </P>
-                <P> IO_CheckSteps  = NumSteps/64  </P>
+                <P> IO_CheckSteps  = 0            </P>
                 <P> s              = 2.0          </P>
                 <P> kappa          = 1.0          </P>
                 <P> alpha          = 2.0          </P>
