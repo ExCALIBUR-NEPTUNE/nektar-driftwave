@@ -76,9 +76,9 @@ public:
 
 protected:
     // Implicit solver parameters
-    int m_TotNewtonIts = 0;
-    int m_TotLinIts    = 0;
-    int m_TotImpStages = 0;
+    int m_TotNewtonIts          = 0;
+    int m_TotLinIts             = 0;
+    int m_TotImpStages          = 0;
     NekDouble m_jacobiFreeEps   = 5.0E-08;
     NekDouble m_bndEvaluateTime = 0.0;
     NekDouble m_TimeIntegLambda = 0.0;
@@ -119,21 +119,19 @@ protected:
         const Array<OneD, const Array<OneD, NekDouble>> &inpnts,
         Array<OneD, Array<OneD, NekDouble>> &outpnt, const NekDouble time,
         const NekDouble lambda);
-    void ImplicitTimeIntCoeff(
-        const Array<OneD, const Array<OneD, NekDouble>> &inpnts,
-        const Array<OneD, const NekDouble> &inarray,
-        Array<OneD, NekDouble> &out, const NekDouble time,
-        const NekDouble lambda);
+    void ImplicitTimeInt1D(const Array<OneD, const NekDouble> &inarray,
+                           Array<OneD, NekDouble> &out, const NekDouble time,
+                           const NekDouble lambda);
     void CalcRefValues(const Array<OneD, const NekDouble> &inarray);
-    void NonlinSysEvaluatorCoeff1D(const Array<OneD, const NekDouble> &inarray,
-                                   Array<OneD, NekDouble> &out,
-                                   [[maybe_unused]] const bool &flag);
-    void NonlinSysEvaluatorCoeff(
+    void NonlinSysEvaluator1D(const Array<OneD, const NekDouble> &inarray,
+                              Array<OneD, NekDouble> &out,
+                              [[maybe_unused]] const bool &flag);
+    void NonlinSysEvaluator(
         const Array<OneD, const Array<OneD, NekDouble>> &inarray,
         Array<OneD, Array<OneD, NekDouble>> &out);
-    void MatrixMultiplyMatrixFreeCoeff(
-        const Array<OneD, const NekDouble> &inarray,
-        Array<OneD, NekDouble> &out, [[maybe_unused]] const bool &flag);
+    void MatrixMultiplyMatrixFree(const Array<OneD, const NekDouble> &inarray,
+                                  Array<OneD, NekDouble> &out,
+                                  [[maybe_unused]] const bool &flag);
     void DoNullPrecon(const Array<OneD, NekDouble> &inarray,
                       Array<OneD, NekDouble> &outarray, const bool &flag);
     void DoOdeProjection(

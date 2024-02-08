@@ -163,10 +163,11 @@ void DriftWaveSystem::v_InitObject(bool DeclareField)
 
 void DriftWaveSystem::InitialiseNonlinSysSolver()
 {
-    int ntotal = 2 * m_fields[0]->GetNcoeffs();
+    int ntotal = 2 * m_fields[0]->GetNpoints();
 
     // Create the key to hold settings for nonlin solver
     LibUtilities::NekSysKey key = LibUtilities::NekSysKey();
+
     // Load required LinSys parameters:
     m_session->LoadParameter("NekLinSysMaxIterations",
                              key.m_NekLinSysMaxIterations, 30);
@@ -175,6 +176,7 @@ void DriftWaveSystem::InitialiseNonlinSysSolver()
                              key.m_NekLinSysTolerance, 5.0E-2);
     m_session->LoadParameter("GMRESMaxHessMatBand", key.m_KrylovMaxHessMatBand,
                              31);
+
     // Load required NonLinSys parameters:
     m_session->LoadParameter("JacobiFreeEps", m_jacobiFreeEps, 5.0E-8);
     m_session->LoadParameter("NekNonlinSysMaxIterations",
@@ -190,10 +192,9 @@ void DriftWaveSystem::InitialiseNonlinSysSolver()
                               key.m_LinSysIterSolverTypeInNonlin, "GMRES");
 
     LibUtilities::NekSysOperators nekSysOp;
-    nekSysOp.DefineNekSysResEval(&DriftWaveSystem::NonlinSysEvaluatorCoeff1D,
+    nekSysOp.DefineNekSysResEval(&DriftWaveSystem::NonlinSysEvaluator1D, this);
+    nekSysOp.DefineNekSysLhsEval(&DriftWaveSystem::MatrixMultiplyMatrixFree,
                                  this);
-    nekSysOp.DefineNekSysLhsEval(
-        &DriftWaveSystem::MatrixMultiplyMatrixFreeCoeff, this);
     nekSysOp.DefineNekSysPrecon(&DriftWaveSystem::DoNullPrecon, this);
 
     // Initialize non-linear system
@@ -288,32 +289,29 @@ void DriftWaveSystem::ImplicitTimeInt(
     const NekDouble lambda)
 {
     unsigned int nvariables = inpnts.size();
-    unsigned int ncoeffs    = m_fields[0]->GetNcoeffs();
-    unsigned int ntotal     = nvariables * ncoeffs;
+    unsigned int npoints    = m_fields[0]->GetNpoints();
+    unsigned int ntotal     = nvariables * npoints;
 
     Array<OneD, NekDouble> inarray(ntotal);
     Array<OneD, NekDouble> outarray(ntotal);
-    Array<OneD, NekDouble> tmpArray;
 
     for (int i = 0; i < nvariables; ++i)
     {
-        int noffset = i * ncoeffs;
-        tmpArray    = inarray + noffset;
-        m_fields[i]->FwdTrans(inpnts[i], tmpArray);
+        int noffset = i * npoints;
+        Array<OneD, NekDouble> tmp;
+        Vmath::Vcopy(npoints, inpnts[i], 1, tmp = inarray + noffset, 1);
     }
 
-    ImplicitTimeIntCoeff(inpnts, inarray, outarray, time, lambda);
+    ImplicitTimeInt1D(inarray, outarray, time, lambda);
 
     for (int i = 0; i < nvariables; ++i)
     {
-        int noffset = i * ncoeffs;
-        tmpArray    = outarray + noffset;
-        m_fields[i]->BwdTrans(tmpArray, outpnt[i]);
+        int noffset = i * npoints;
+        Vmath::Vcopy(npoints, outarray + noffset, 1, outpnt[i], 1);
     }
 }
 
-void DriftWaveSystem::ImplicitTimeIntCoeff(
-    const Array<OneD, const Array<OneD, NekDouble>> &inpnts,
+void DriftWaveSystem::ImplicitTimeInt1D(
     const Array<OneD, const NekDouble> &inarray, Array<OneD, NekDouble> &out,
     const NekDouble time, const NekDouble lambda)
 {
@@ -337,15 +335,9 @@ void DriftWaveSystem::ImplicitTimeIntCoeff(
 
 void DriftWaveSystem::CalcRefValues(const Array<OneD, const NekDouble> &inarray)
 {
-    unsigned int nvariables   = m_fields.size();
-    unsigned int ntotal       = inarray.size();
-    unsigned int npoints      = ntotal / nvariables;
-    unsigned int nTotalGlobal = ntotal;
-    unsigned int nTotalDOF    = nTotalGlobal / nvariables;
-
-    m_comm->GetSpaceComm()->AllReduce(nTotalGlobal,
-                                      Nektar::LibUtilities::ReduceSum);
-    NekDouble invTotalDOF = 1.0 / nTotalDOF;
+    unsigned int nvariables = m_fields.size();
+    unsigned int ntotal     = inarray.size();
+    unsigned int npoints    = ntotal / nvariables;
 
     Array<OneD, NekDouble> magnitdEstimat(2, 0.0);
 
@@ -365,11 +357,11 @@ void DriftWaveSystem::CalcRefValues(const Array<OneD, const NekDouble> &inarray)
     }
 }
 
-void DriftWaveSystem::NonlinSysEvaluatorCoeff1D(
+void DriftWaveSystem::NonlinSysEvaluator1D(
     const Array<OneD, const NekDouble> &inarray, Array<OneD, NekDouble> &out,
     [[maybe_unused]] const bool &flag)
 {
-    unsigned int npoints = m_fields[0]->GetNcoeffs();
+    unsigned int npoints = m_fields[0]->GetNpoints();
     Array<OneD, Array<OneD, NekDouble>> in2D(2);
     Array<OneD, Array<OneD, NekDouble>> out2D(2);
     for (int i = 0; i < 2; ++i)
@@ -378,41 +370,33 @@ void DriftWaveSystem::NonlinSysEvaluatorCoeff1D(
         in2D[i]    = inarray + offset;
         out2D[i]   = out + offset;
     }
-    NonlinSysEvaluatorCoeff(in2D, out2D);
+    NonlinSysEvaluator(in2D, out2D);
 }
 
-void DriftWaveSystem::NonlinSysEvaluatorCoeff(
+void DriftWaveSystem::NonlinSysEvaluator(
     const Array<OneD, const Array<OneD, NekDouble>> &inarray,
     Array<OneD, Array<OneD, NekDouble>> &out)
 {
-    unsigned int ncoeffs = m_fields[0]->GetNcoeffs();
     unsigned int npoints = m_fields[0]->GetNpoints();
-
     Array<OneD, Array<OneD, NekDouble>> inpnts(2);
-    Array<OneD, Array<OneD, NekDouble>> outpnts(2);
-
     for (int i = 0; i < 2; ++i)
     {
-        inpnts[i]  = Array<OneD, NekDouble>(npoints, 0.0);
-        outpnts[i] = Array<OneD, NekDouble>(npoints, 0.0);
-        m_fields[i]->BwdTrans(inarray[i], inpnts[i]);
+        inpnts[i] = Array<OneD, NekDouble>(npoints, 0.0);
     }
 
-    DoOdeProjection(inpnts, inpnts, m_bndEvaluateTime);
-
-    ExplicitTimeInt(inpnts, outpnts, m_bndEvaluateTime);
+    DoOdeProjection(inarray, inpnts, m_bndEvaluateTime);
+    ExplicitTimeInt(inpnts, out, m_bndEvaluateTime);
 
     for (int i = 0; i < 2; ++i)
     {
-        m_fields[i]->FwdTrans(outpnts[i], out[i]);
-        Vmath::Svtvp(ncoeffs, -m_TimeIntegLambda, out[i], 1, inarray[i], 1,
+        Vmath::Svtvp(npoints, -m_TimeIntegLambda, out[i], 1, inarray[i], 1,
                      out[i], 1);
-        Vmath::Vsub(ncoeffs, out[i], 1,
-                    m_nonlinsol->GetRefSourceVec() + i * ncoeffs, 1, out[i], 1);
+        Vmath::Vsub(npoints, out[i], 1,
+                    m_nonlinsol->GetRefSourceVec() + i * npoints, 1, out[i], 1);
     }
 }
 
-void DriftWaveSystem::MatrixMultiplyMatrixFreeCoeff(
+void DriftWaveSystem::MatrixMultiplyMatrixFree(
     const Array<OneD, const NekDouble> &inarray, Array<OneD, NekDouble> &out,
     [[maybe_unused]] const bool &flag)
 {
@@ -430,7 +414,7 @@ void DriftWaveSystem::MatrixMultiplyMatrixFreeCoeff(
     Array<OneD, NekDouble> resplus{ntotal};
 
     Vmath::Svtvp(ntotal, eps, inarray, 1, solref, 1, solplus, 1);
-    NonlinSysEvaluatorCoeff1D(solplus, resplus, flag);
+    NonlinSysEvaluator1D(solplus, resplus, flag);
     Vmath::Vsub(ntotal, resplus, 1, resref, 1, out, 1);
     Vmath::Smul(ntotal, 1.0 / eps, out, 1, out, 1);
 }
