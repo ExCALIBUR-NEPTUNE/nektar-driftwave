@@ -29,14 +29,14 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //
-// Description: Unsteady advection solve routines
+// Description: Unsteady driftwave solve routines
 //
 ///////////////////////////////////////////////////////////////////////////////
 
 #ifndef NEKTAR_DRIFTWAVESYSTEM_H
 #define NEKTAR_DRIFTWAVESYSTEM_H
 
-#include <LibUtilities/LinearAlgebra/NekNonlinSys.h>
+#include <LibUtilities/LinearAlgebra/NekNonlinSysIter.h>
 #include <SolverUtils/AdvectionSystem.h>
 #include <SolverUtils/RiemannSolvers/RiemannSolver.h>
 
@@ -84,7 +84,7 @@ protected:
     NekDouble m_TimeIntegLambda = 0.0;
     NekDouble m_inArrayNorm     = -1.0;
 
-    LibUtilities::NekNonlinSysSharedPtr m_nonlinsol;
+    LibUtilities::NekNonlinSysIterSharedPtr m_nonlinsol;
 
     /// Storage for the drift velocity. The outer index is dimension, and inner
     /// index the solution nodes (in physical space).

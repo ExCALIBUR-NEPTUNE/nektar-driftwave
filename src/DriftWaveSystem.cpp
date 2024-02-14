@@ -181,8 +181,8 @@ void DriftWaveSystem::InitialiseNonlinSysSolver()
     m_session->LoadParameter("JacobiFreeEps", m_jacobiFreeEps, 5.0E-8);
     m_session->LoadParameter("NekNonlinSysMaxIterations",
                              key.m_NekNonlinSysMaxIterations, 10);
-    // m_session->LoadParameter("NewtonRelativeIteTol",
-    //                         key.m_NekNonLinSysTolerance, 1.0E-12);
+    m_session->LoadParameter("NewtonRelativeIteTol",
+                             key.m_NekNonLinSysTolerance, 1.0E-12);
     WARNINGL0(!m_session->DefinesParameter("NewtonAbsoluteIteTol"),
               "Please specify NewtonRelativeIteTol instead of "
               "NewtonAbsoluteIteTol in XML session file");
@@ -198,7 +198,7 @@ void DriftWaveSystem::InitialiseNonlinSysSolver()
     nekSysOp.DefineNekSysPrecon(&DriftWaveSystem::DoNullPrecon, this);
 
     // Initialize non-linear system
-    m_nonlinsol = LibUtilities::GetNekNonlinSysFactory().CreateInstance(
+    m_nonlinsol = LibUtilities::GetNekNonlinSysIterFactory().CreateInstance(
         "Newton", m_session, m_comm->GetRowComm(), ntotal, key);
     m_nonlinsol->SetSysOperators(nekSysOp);
 }
@@ -324,7 +324,7 @@ void DriftWaveSystem::ImplicitTimeInt1D(
         CalcRefValues(inarray);
     }
 
-    // m_nonlinsol->SetRhsMagnitude(m_inArrayNorm);
+    m_nonlinsol->SetRhsMagnitude(m_inArrayNorm);
 
     m_TotNewtonIts += m_nonlinsol->SolveSystem(ntotal, inarray, out, 0);
 
