@@ -288,23 +288,23 @@ void DriftWaveSystem::ImplicitTimeInt(
     Array<OneD, Array<OneD, NekDouble>> &outpnt, const NekDouble time,
     const NekDouble lambda)
 {
-    unsigned int nvariables = inpnts.size();
-    unsigned int npoints    = m_fields[0]->GetNpoints();
-    unsigned int ntotal     = nvariables * npoints;
+    m_TimeIntegLambda    = lambda;
+    m_bndEvaluateTime    = time;
+    unsigned int npoints = m_fields[0]->GetNpoints();
 
-    Array<OneD, NekDouble> inarray(ntotal);
-    Array<OneD, NekDouble> outarray(ntotal);
+    Array<OneD, NekDouble> inarray(2 * npoints);
+    Array<OneD, NekDouble> outarray(2 * npoints);
+    Array<OneD, NekDouble> tmp;
 
-    for (int i = 0; i < nvariables; ++i)
+    for (int i = 0; i < 2; ++i)
     {
         int noffset = i * npoints;
-        Array<OneD, NekDouble> tmp;
         Vmath::Vcopy(npoints, inpnts[i], 1, tmp = inarray + noffset, 1);
     }
 
-    ImplicitTimeInt1D(inarray, outarray, time, lambda);
+    ImplicitTimeInt1D(inarray, outarray);
 
-    for (int i = 0; i < nvariables; ++i)
+    for (int i = 0; i < 2; ++i)
     {
         int noffset = i * npoints;
         Vmath::Vcopy(npoints, outarray + noffset, 1, outpnt[i], 1);
@@ -312,21 +312,13 @@ void DriftWaveSystem::ImplicitTimeInt(
 }
 
 void DriftWaveSystem::ImplicitTimeInt1D(
-    const Array<OneD, const NekDouble> &inarray, Array<OneD, NekDouble> &out,
-    const NekDouble time, const NekDouble lambda)
+    const Array<OneD, const NekDouble> &inarray, Array<OneD, NekDouble> &out)
 {
-    m_TimeIntegLambda   = lambda;
-    m_bndEvaluateTime   = time;
-    unsigned int ntotal = inarray.size();
-
-    if (m_inArrayNorm < 0.0)
-    {
-        CalcRefValues(inarray);
-    }
+    CalcRefValues(inarray);
 
     m_nonlinsol->SetRhsMagnitude(m_inArrayNorm);
 
-    m_TotNewtonIts += m_nonlinsol->SolveSystem(ntotal, inarray, out, 0);
+    m_TotNewtonIts += m_nonlinsol->SolveSystem(inarray.size(), inarray, out, 0);
 
     m_TotLinIts += m_nonlinsol->GetNtotLinSysIts();
 
@@ -335,9 +327,7 @@ void DriftWaveSystem::ImplicitTimeInt1D(
 
 void DriftWaveSystem::CalcRefValues(const Array<OneD, const NekDouble> &inarray)
 {
-    unsigned int nvariables = m_fields.size();
-    unsigned int ntotal     = inarray.size();
-    unsigned int npoints    = ntotal / nvariables;
+    unsigned int npoints = m_fields[0]->GetNpoints();
 
     Array<OneD, NekDouble> magnitdEstimat(2, 0.0);
 
@@ -419,7 +409,7 @@ void DriftWaveSystem::MatrixMultiplyMatrixFree(
     Vmath::Smul(ntotal, 1.0 / eps, out, 1, out, 1);
 }
 
-void DriftWaveSystem::DoNullPrecon(const Array<OneD, NekDouble> &inarray,
+void DriftWaveSystem::DoNullPrecon(const Array<OneD, const NekDouble> &inarray,
                                    Array<OneD, NekDouble> &outarray,
                                    [[maybe_unused]] const bool &flag)
 {

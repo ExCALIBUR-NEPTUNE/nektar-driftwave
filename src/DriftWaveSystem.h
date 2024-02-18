@@ -120,8 +120,7 @@ protected:
         Array<OneD, Array<OneD, NekDouble>> &outpnt, const NekDouble time,
         const NekDouble lambda);
     void ImplicitTimeInt1D(const Array<OneD, const NekDouble> &inarray,
-                           Array<OneD, NekDouble> &out, const NekDouble time,
-                           const NekDouble lambda);
+                           Array<OneD, NekDouble> &out);
     void CalcRefValues(const Array<OneD, const NekDouble> &inarray);
     void NonlinSysEvaluator1D(const Array<OneD, const NekDouble> &inarray,
                               Array<OneD, NekDouble> &out,
@@ -132,7 +131,7 @@ protected:
     void MatrixMultiplyMatrixFree(const Array<OneD, const NekDouble> &inarray,
                                   Array<OneD, NekDouble> &out,
                                   [[maybe_unused]] const bool &flag);
-    void DoNullPrecon(const Array<OneD, NekDouble> &inarray,
+    void DoNullPrecon(const Array<OneD, const NekDouble> &inarray,
                       Array<OneD, NekDouble> &outarray, const bool &flag);
     void DoOdeProjection(
         const Array<OneD, const Array<OneD, NekDouble>> &inarray,
