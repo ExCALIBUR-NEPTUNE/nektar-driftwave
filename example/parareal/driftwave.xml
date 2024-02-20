@@ -33,7 +33,7 @@
                 <P> kappa          = 1.0                 </P>
                 <P> alpha          = 2.0                 </P>
                 <P> PITIterMax     = 8                   </P>
-                <P> PITToler       = 1e-15               </P>
+                <P> PITToler       = 1e-16               </P>
                 <P> IterativeSolverTolerance  = 1.0E-14  </P>
             </TIMELEVEL>
             <TIMELEVEL VALUE="1">
