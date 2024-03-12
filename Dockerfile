@@ -1,4 +1,4 @@
-FROM nektarpp/nektar-dev:2510247d
+FROM nektarpp/nektar-dev:v5.5.0
 
 ARG INSTALL_PREFIX=/usr/local
 
