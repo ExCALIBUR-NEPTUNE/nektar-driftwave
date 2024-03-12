@@ -45,10 +45,9 @@ std::string DriftWaveSystem::className =
         "System for the Hasegawa-Wakatani equations.");
 
 DriftWaveSystem::DriftWaveSystem(
-    const LibUtilities::SessionReaderSharedPtr& session,
-    const SpatialDomains::MeshGraphSharedPtr& graph)
-    : UnsteadySystem(session, graph),
-      AdvectionSystem(session, graph),
+    const LibUtilities::SessionReaderSharedPtr &session,
+    const SpatialDomains::MeshGraphSharedPtr &graph)
+    : UnsteadySystem(session, graph), AdvectionSystem(session, graph),
       m_driftVel(2)
 {
 }
@@ -63,13 +62,12 @@ void DriftWaveSystem::v_InitObject(bool DeclareField)
     // solve. Note that you can still perform a Poisson solve using a
     // discontinuous field, which is done via the hybridisable discontinuous
     // Galerkin (HDG) approach.
-    m_fields[2] = MemoryManager<MultiRegions::ContField>
-        ::AllocateSharedPtr(
-            m_session, m_graph, m_session->GetVariable(2), true, true);
+    m_fields[2] = MemoryManager<MultiRegions::ContField>::AllocateSharedPtr(
+        m_session, m_graph, m_session->GetVariable(2), true, true);
 
     // Tell UnsteadySystem to only integrate first two fields in time
     // (i.e. vorticity and density), ignoring electrostatic potential since .
-    m_intVariables = { 0, 1 };
+    m_intVariables = {0, 1};
 
     // Assign storage for drift velocity.
     for (int i = 0; i < 2; ++i)
@@ -90,7 +88,7 @@ void DriftWaveSystem::v_InitObject(bool DeclareField)
     // Type of advection class to be used. By default, we only support the
     // discontinuous projection, since this is the only approach we're
     // considering for this solver.
-    switch(m_projectionType)
+    switch (m_projectionType)
     {
         // Discontinuous field
         case MultiRegions::eDiscontinuous:
@@ -116,8 +114,8 @@ void DriftWaveSystem::v_InitObject(bool DeclareField)
 
             // Create an advection object of the type above using the factory
             // pattern.
-            m_advObject = SolverUtils::
-                GetAdvectionFactory().CreateInstance(advName, advName);
+            m_advObject = SolverUtils::GetAdvectionFactory().CreateInstance(
+                advName, advName);
 
             // The advection object needs to know the flux vector being
             // calculated: this is done with a callback.
@@ -142,23 +140,67 @@ void DriftWaveSystem::v_InitObject(bool DeclareField)
 
         default:
         {
-            ASSERTL0(false,
-                     "Unsupported projection type: only discontinuous"
-                     " projection supported.");
+            ASSERTL0(false, "Unsupported projection type: only discontinuous"
+                            " projection supported.");
             break;
         }
     }
-
-    ASSERTL0(m_explicitAdvection,
-             "This solver only supports explicit-in-time advection.");
 
     // The m_ode object defines the timestepping to be used, and lives in the
     // SolverUtils::UnsteadySystem class. For explicit solvers, you need to
     // supply a right-hand side function, and a projection function (e.g. for
     // continuous Galerkin this would be an assembly-type operation to ensure
     // C^0 connectivity). These are done again through callbacks.
-    m_ode.DefineOdeRhs    (&DriftWaveSystem::ExplicitTimeInt, this);
+    m_ode.DefineOdeRhs(&DriftWaveSystem::ExplicitTimeInt, this);
+    m_ode.DefineImplicitSolve(&DriftWaveSystem::ImplicitTimeInt, this);
     m_ode.DefineProjection(&DriftWaveSystem::DoOdeProjection, this);
+
+    if (!m_explicitAdvection)
+    {
+        InitialiseNonlinSysSolver();
+    }
+}
+
+void DriftWaveSystem::InitialiseNonlinSysSolver()
+{
+    int ntotal = 2 * m_fields[0]->GetNpoints();
+
+    // Create the key to hold settings for nonlin solver
+    LibUtilities::NekSysKey key = LibUtilities::NekSysKey();
+
+    // Load required LinSys parameters:
+    m_session->LoadParameter("NekLinSysMaxIterations",
+                             key.m_NekLinSysMaxIterations, 30);
+    m_session->LoadParameter("LinSysMaxStorage", key.m_LinSysMaxStorage, 30);
+    m_session->LoadParameter("LinSysRelativeTolInNonlin",
+                             key.m_NekLinSysTolerance, 5.0E-2);
+    m_session->LoadParameter("GMRESMaxHessMatBand", key.m_KrylovMaxHessMatBand,
+                             31);
+
+    // Load required NonLinSys parameters:
+    m_session->LoadParameter("JacobiFreeEps", m_jacobiFreeEps, 5.0E-8);
+    m_session->LoadParameter("NekNonlinSysMaxIterations",
+                             key.m_NekNonlinSysMaxIterations, 10);
+    m_session->LoadParameter("NewtonRelativeIteTol",
+                             key.m_NekNonLinSysTolerance, 1.0E-12);
+    WARNINGL0(!m_session->DefinesParameter("NewtonAbsoluteIteTol"),
+              "Please specify NewtonRelativeIteTol instead of "
+              "NewtonAbsoluteIteTol in XML session file");
+    m_session->LoadParameter("NonlinIterTolRelativeL2",
+                             key.m_NonlinIterTolRelativeL2, 1.0E-3);
+    m_session->LoadSolverInfo("LinSysIterSolverTypeInNonlin",
+                              key.m_LinSysIterSolverTypeInNonlin, "GMRES");
+
+    LibUtilities::NekSysOperators nekSysOp;
+    nekSysOp.DefineNekSysResEval(&DriftWaveSystem::NonlinSysEvaluator1D, this);
+    nekSysOp.DefineNekSysLhsEval(&DriftWaveSystem::MatrixMultiplyMatrixFree,
+                                 this);
+    nekSysOp.DefineNekSysPrecon(&DriftWaveSystem::DoNullPrecon, this);
+
+    // Initialize non-linear system
+    m_nonlinsol = LibUtilities::GetNekNonlinSysIterFactory().CreateInstance(
+        "Newton", m_session, m_comm->GetRowComm(), ntotal, key);
+    m_nonlinsol->SetSysOperators(nekSysOp);
 }
 
 /**
@@ -172,7 +214,7 @@ void DriftWaveSystem::v_InitObject(bool DeclareField)
  *
  * The order of operations is as follows:
  *
- * - First, compute the electrostatic potential \f$ \phi \f$, given the 
+ * - First, compute the electrostatic potential \f$ \phi \f$, given the
  * - Using this, compute the drift velocity \f$ (\partial_y\phi,
  *   -\partial_x\phi).
  * - Then evaluate the \f$ \nabla\cdot\mathbf{F} \f$ operator using the
@@ -191,9 +233,8 @@ void DriftWaveSystem::v_InitObject(bool DeclareField)
  * @param time       Current value of time.
  */
 void DriftWaveSystem::ExplicitTimeInt(
-    const Array<OneD, const Array<OneD,NekDouble> > &inarray,
-          Array<OneD,       Array<OneD,NekDouble> > &outarray,
-    const NekDouble time)
+    const Array<OneD, const Array<OneD, NekDouble>> &inarray,
+    Array<OneD, Array<OneD, NekDouble>> &outarray, const NekDouble time)
 {
     // nPts below corresponds to the total number of solution/integration
     // points: i.e. number of elements * quadrature points per element.
@@ -208,14 +249,13 @@ void DriftWaveSystem::ExplicitTimeInt(
     // Solve for phi. Output of this routine is in coefficient (spectral) space,
     // so backwards transform to physical space since we'll need that for the
     // advection step & computing drift velocity.
-    m_fields[2]->HelmSolve(inarray[0], m_fields[2]->UpdateCoeffs(),
-                           factors);
-    m_fields[2]->BwdTrans (m_fields[2]->GetCoeffs(),
-                           m_fields[2]->UpdatePhys());
+    m_fields[2]->HelmSolve(inarray[0], m_fields[2]->UpdateCoeffs(), factors);
+    m_fields[2]->BwdTrans(m_fields[2]->GetCoeffs(), m_fields[2]->UpdatePhys());
 
     // Calculate drift velocity v_E: PhysDeriv takes input and computes spatial
     // derivatives.
-    m_fields[2]->PhysDeriv(m_fields[2]->GetPhys(), m_driftVel[1], m_driftVel[0]);
+    m_fields[2]->PhysDeriv(m_fields[2]->GetPhys(), m_driftVel[1],
+                           m_driftVel[0]);
 
     // We frequently use vector math (Vmath) routines for one-line operations
     // like negating entries in a vector.
@@ -239,8 +279,141 @@ void DriftWaveSystem::ExplicitTimeInt(
     Vmath::Vadd(nPts, sourceTerm, 1, outarray[1], 1, outarray[1], 1);
 
     // Add source term -kappa * d(phi)/dy to n equation.
-    Vmath::Svtvp(nPts, -m_kappa, m_driftVel[0], 1,
-                 outarray[1], 1, outarray[1], 1);
+    Vmath::Svtvp(nPts, -m_kappa, m_driftVel[0], 1, outarray[1], 1, outarray[1],
+                 1);
+}
+
+void DriftWaveSystem::ImplicitTimeInt(
+    const Array<OneD, const Array<OneD, NekDouble>> &inpnts,
+    Array<OneD, Array<OneD, NekDouble>> &outpnt, const NekDouble time,
+    const NekDouble lambda)
+{
+    m_TimeIntegLambda    = lambda;
+    m_bndEvaluateTime    = time;
+    unsigned int npoints = m_fields[0]->GetNpoints();
+
+    Array<OneD, NekDouble> inarray(2 * npoints);
+    Array<OneD, NekDouble> outarray(2 * npoints);
+    Array<OneD, NekDouble> tmp;
+
+    for (int i = 0; i < 2; ++i)
+    {
+        int noffset = i * npoints;
+        Vmath::Vcopy(npoints, inpnts[i], 1, tmp = inarray + noffset, 1);
+    }
+
+    ImplicitTimeInt1D(inarray, outarray);
+
+    for (int i = 0; i < 2; ++i)
+    {
+        int noffset = i * npoints;
+        Vmath::Vcopy(npoints, outarray + noffset, 1, outpnt[i], 1);
+    }
+}
+
+void DriftWaveSystem::ImplicitTimeInt1D(
+    const Array<OneD, const NekDouble> &inarray, Array<OneD, NekDouble> &out)
+{
+    CalcRefValues(inarray);
+
+    m_nonlinsol->SetRhsMagnitude(m_inArrayNorm);
+
+    m_TotNewtonIts += m_nonlinsol->SolveSystem(inarray.size(), inarray, out, 0);
+
+    m_TotLinIts += m_nonlinsol->GetNtotLinSysIts();
+
+    m_TotImpStages++;
+}
+
+void DriftWaveSystem::CalcRefValues(const Array<OneD, const NekDouble> &inarray)
+{
+    unsigned int npoints = m_fields[0]->GetNpoints();
+
+    Array<OneD, NekDouble> magnitdEstimat(2, 0.0);
+
+    for (int i = 0; i < 2; ++i)
+    {
+        int offset = i * npoints;
+        magnitdEstimat[i] =
+            Vmath::Dot(npoints, inarray + offset, inarray + offset);
+    }
+    m_comm->GetSpaceComm()->AllReduce(magnitdEstimat,
+                                      Nektar::LibUtilities::ReduceSum);
+
+    m_inArrayNorm = 0.0;
+    for (int i = 0; i < 2; ++i)
+    {
+        m_inArrayNorm += magnitdEstimat[i];
+    }
+}
+
+void DriftWaveSystem::NonlinSysEvaluator1D(
+    const Array<OneD, const NekDouble> &inarray, Array<OneD, NekDouble> &out,
+    [[maybe_unused]] const bool &flag)
+{
+    unsigned int npoints = m_fields[0]->GetNpoints();
+    Array<OneD, Array<OneD, NekDouble>> in2D(2);
+    Array<OneD, Array<OneD, NekDouble>> out2D(2);
+    for (int i = 0; i < 2; ++i)
+    {
+        int offset = i * npoints;
+        in2D[i]    = inarray + offset;
+        out2D[i]   = out + offset;
+    }
+    NonlinSysEvaluator(in2D, out2D);
+}
+
+void DriftWaveSystem::NonlinSysEvaluator(
+    const Array<OneD, const Array<OneD, NekDouble>> &inarray,
+    Array<OneD, Array<OneD, NekDouble>> &out)
+{
+    unsigned int npoints = m_fields[0]->GetNpoints();
+    Array<OneD, Array<OneD, NekDouble>> inpnts(2);
+    for (int i = 0; i < 2; ++i)
+    {
+        inpnts[i] = Array<OneD, NekDouble>(npoints, 0.0);
+    }
+
+    DoOdeProjection(inarray, inpnts, m_bndEvaluateTime);
+    ExplicitTimeInt(inpnts, out, m_bndEvaluateTime);
+
+    for (int i = 0; i < 2; ++i)
+    {
+        Vmath::Svtvp(npoints, -m_TimeIntegLambda, out[i], 1, inarray[i], 1,
+                     out[i], 1);
+        Vmath::Vsub(npoints, out[i], 1,
+                    m_nonlinsol->GetRefSourceVec() + i * npoints, 1, out[i], 1);
+    }
+}
+
+void DriftWaveSystem::MatrixMultiplyMatrixFree(
+    const Array<OneD, const NekDouble> &inarray, Array<OneD, NekDouble> &out,
+    [[maybe_unused]] const bool &flag)
+{
+    const Array<OneD, const NekDouble> solref = m_nonlinsol->GetRefSolution();
+    const Array<OneD, const NekDouble> resref = m_nonlinsol->GetRefResidual();
+
+    unsigned int ntotal   = inarray.size();
+    NekDouble magninarray = Vmath::Dot(ntotal, inarray, inarray);
+    m_comm->GetSpaceComm()->AllReduce(magninarray,
+                                      Nektar::LibUtilities::ReduceSum);
+    NekDouble eps =
+        m_jacobiFreeEps * sqrt((sqrt(m_inArrayNorm) + 1.0) / magninarray);
+
+    Array<OneD, NekDouble> solplus{ntotal};
+    Array<OneD, NekDouble> resplus{ntotal};
+
+    Vmath::Svtvp(ntotal, eps, inarray, 1, solref, 1, solplus, 1);
+    NonlinSysEvaluator1D(solplus, resplus, flag);
+    Vmath::Vsub(ntotal, resplus, 1, resref, 1, out, 1);
+    Vmath::Smul(ntotal, 1.0 / eps, out, 1, out, 1);
+}
+
+void DriftWaveSystem::DoNullPrecon(const Array<OneD, const NekDouble> &inarray,
+                                   Array<OneD, NekDouble> &outarray,
+                                   [[maybe_unused]] const bool &flag)
+{
+    Vmath::Vcopy(inarray.size(), inarray, 1, outarray, 1);
 }
 
 /**
@@ -252,9 +425,8 @@ void DriftWaveSystem::ExplicitTimeInt(
  * the output of the RHS function is polynomial.
  */
 void DriftWaveSystem::DoOdeProjection(
-    const Array<OneD, const Array<OneD, NekDouble> > &inarray,
-          Array<OneD,       Array<OneD, NekDouble> > &outarray,
-    const NekDouble time)
+    const Array<OneD, const Array<OneD, NekDouble>> &inarray,
+    Array<OneD, Array<OneD, NekDouble>> &outarray, const NekDouble time)
 {
     int nvariables = inarray.size(), npoints = GetNpoints();
     SetBoundaryConditions(time);
@@ -269,21 +441,19 @@ void DriftWaveSystem::DoOdeProjection(
  * @brief Compute the flux vector for this system.
  */
 void DriftWaveSystem::GetFluxVector(
-    const Array<OneD, Array<OneD, NekDouble> >               &physfield,
-          Array<OneD, Array<OneD, Array<OneD, NekDouble> > > &flux)
+    const Array<OneD, Array<OneD, NekDouble>> &physfield,
+    Array<OneD, Array<OneD, Array<OneD, NekDouble>>> &flux)
 {
     ASSERTL1(flux[0].size() == m_driftVel.size(),
              "Dimension of flux array and velocity array do not match");
 
-    int i , j;
     int nq = physfield[0].size();
 
-    for (i = 0; i < flux.size(); ++i)
+    for (int i = 0; i < flux.size(); ++i)
     {
-        for (j = 0; j < flux[0].size(); ++j)
+        for (int j = 0; j < flux[0].size(); ++j)
         {
-            Vmath::Vmul(nq, physfield[i], 1, m_driftVel[j], 1,
-                        flux[i][j], 1);
+            Vmath::Vmul(nq, physfield[i], 1, m_driftVel[j], 1, flux[i][j], 1);
         }
     }
 }
@@ -295,7 +465,6 @@ void DriftWaveSystem::GetFluxVector(
 Array<OneD, NekDouble> &DriftWaveSystem::GetNormalVelocity()
 {
     // Number of trace (interface) points
-    int i;
     int nTracePts = GetTraceNpoints();
 
     // Auxiliary variable to compute the normal velocity
@@ -306,18 +475,15 @@ Array<OneD, NekDouble> &DriftWaveSystem::GetNormalVelocity()
 
     // Compute dot product of velocity along trace with trace normals. Store in
     // m_traceVn.
-    for (i = 0; i < m_driftVel.size(); ++i)
+    for (int i = 0; i < m_driftVel.size(); ++i)
     {
         m_fields[0]->ExtractTracePhys(m_driftVel[i], tmp);
 
-        Vmath::Vvtvp(nTracePts,
-                     m_traceNormals[i], 1,
-                     tmp,               1,
-                     m_traceVn,         1,
-                     m_traceVn,         1);
+        Vmath::Vvtvp(nTracePts, m_traceNormals[i], 1, tmp, 1, m_traceVn, 1,
+                     m_traceVn, 1);
     }
 
     return m_traceVn;
 }
 
-}
+} // namespace Nektar

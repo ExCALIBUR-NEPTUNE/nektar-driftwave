@@ -33,8 +33,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <SolverUtils/Driver.h>
 #include <LibUtilities/BasicUtils/SessionReader.h>
+#include <SolverUtils/Driver.h>
 
 using namespace Nektar;
 using namespace Nektar::SolverUtils;
@@ -52,7 +52,8 @@ int main(int argc, char *argv[])
         // Create driver.
         std::string driverName;
         session->LoadSolverInfo("Driver", driverName, "Standard");
-        auto drv = GetDriverFactory().CreateInstance(driverName, session, graph);
+        auto drv =
+            GetDriverFactory().CreateInstance(driverName, session, graph);
 
         // Execute driver
         drv->Execute();
@@ -60,11 +61,11 @@ int main(int argc, char *argv[])
         // Finalise session
         session->Finalise();
     }
-    catch (const std::runtime_error& e)
+    catch (const std::runtime_error &e)
     {
         return 1;
     }
-    catch (const std::string& eStr)
+    catch (const std::string &eStr)
     {
         std::cout << "Error: " << eStr << std::endl;
     }

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<NEKTAR>
+    <COLLECTIONS DEFAULT="auto" />
+    <EXPANSIONS>
+        <E COMPOSITE="C[0]" NUMMODES="4" TYPE="MODIFIED" FIELDS="zeta,n,phi" />
+    </EXPANSIONS>
+
+    <CONDITIONS>
+        <SOLVERINFO>
+            <I PROPERTY="EQTYPE" VALUE="DriftWaveSystem" />
+            <I PROPERTY="Projection" VALUE="DisContinuous" />
+            <I PROPERTY="TimeIntegrationMethod" VALUE="DIRKOrder2" />
+            <I PROPERTY="AdvectionAdvancement"  VALUE="Implicit" />
+            <I PROPERTY="LinSysIterSolverTypeInNonlin" VALUE="GMRES" />
+        </SOLVERINFO>
+
+        <PARAMETERS>
+            <P> NumSteps       = 1000                </P>
+            <P> TimeStep       = 0.05                </P>
+            <P> IO_InfoSteps   = 1                   </P>
+            <P> IO_CheckSteps  = 10                  </P>
+            <P> s              = 2.0                 </P>
+            <P> kappa          = 1.0                 </P>
+            <P> alpha          = 2.0                 </P>
+            <P> IterativeSolverTolerance  = 1.0E-14  </P>
+            <P> NekNonlinSysMaxIterations = 30       </P>
+            <P> NewtonRelativeIteTol      = 1.0E-10  </P>
+            <P> NonlinIterTolRelativeL2   = 1.0E-10  </P>
+            <P> LinSysRelativeTolInNonlin = 1.0E-02  </P>
+        </PARAMETERS>
+
+        <VARIABLES>
+            <V ID="0"> zeta </V>
+            <V ID="1"> n </V>
+            <V ID="2"> phi </V>
+        </VARIABLES>
+
+        <BOUNDARYREGIONS>
+            <B ID="0"> C[1] </B>
+            <B ID="1"> C[2] </B>
+            <B ID="2"> C[3] </B>
+            <B ID="3"> C[4] </B>
+        </BOUNDARYREGIONS>
+
+        <BOUNDARYCONDITIONS>
+            <REGION REF="0">
+                <P VAR="zeta" VALUE="[2]" />
+                <P VAR="n"    VALUE="[2]" />
+                <P VAR="phi"  VALUE="[2]" />
+            </REGION>
+            <REGION REF="1">
+                <P VAR="zeta" VALUE="[3]" />
+                <P VAR="n"    VALUE="[3]" />
+                <P VAR="phi"  VALUE="[3]" />
+            </REGION>
+            <REGION REF="2">
+                <P VAR="zeta" VALUE="[0]" />
+                <P VAR="n"    VALUE="[0]" />
+                <P VAR="phi"  VALUE="[0]" />
+            </REGION>
+            <REGION REF="3">
+                <P VAR="zeta" VALUE="[1]" />
+                <P VAR="n"    VALUE="[1]" />
+                <P VAR="phi"  VALUE="[1]" />
+            </REGION>
+        </BOUNDARYCONDITIONS>
+
+        <FUNCTION NAME="InitialConditions">
+            <E VAR="n"    VALUE="exp((-x*x-y*y)/(s*s))" />
+            <E VAR="zeta" VALUE="4*exp((-x*x-y*y)/(s*s))*(-s*s+x*x+y*y)/s^4" />
+            <E VAR="phi"  VALUE="exp(-(x*x+y*y)/(s*s))" />
+        </FUNCTION>
+    </CONDITIONS>
+</NEKTAR>

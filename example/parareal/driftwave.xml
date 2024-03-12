@@ -2,12 +2,7 @@
 <NEKTAR>
     <COLLECTIONS DEFAULT="auto" />
     <EXPANSIONS>
-        <TIMELEVEL VALUE="0">
-            <E COMPOSITE="C[0]" NUMMODES="5" TYPE="MODIFIED" FIELDS="zeta,n,phi" />
-        </TIMELEVEL>
-        <TIMELEVEL VALUE="1">
-            <E COMPOSITE="C[0]" NUMMODES="3" TYPE="MODIFIED" FIELDS="zeta,n,phi" />
-        </TIMELEVEL>
+        <E COMPOSITE="C[0]" NUMMODES="5" TYPE="MODIFIED" FIELDS="zeta,n,phi" />
     </EXPANSIONS>
 
     <CONDITIONS>
@@ -15,34 +10,45 @@
             <TIMELEVEL VALUE="0">
                 <I PROPERTY="EQTYPE" VALUE="DriftWaveSystem" />
                 <I PROPERTY="Projection" VALUE="DisContinuous" />
-                <I PROPERTY="TimeIntegrationMethod" VALUE="ClassicalRungeKutta4" />
+                <I PROPERTY="TimeIntegrationMethod" VALUE="RungeKutta4" />
+                <I PROPERTY="AdvectionAdvancement"  VALUE="Explicit" />
                 <I PROPERTY="Driver"     VALUE="Parareal" />
             </TIMELEVEL>
             <TIMELEVEL VALUE="1">
                 <I PROPERTY="EQTYPE" VALUE="DriftWaveSystem" />
                 <I PROPERTY="Projection" VALUE="DisContinuous" />
-                <I PROPERTY="TimeIntegrationMethod" VALUE="RungeKutta2" />
+                <I PROPERTY="TimeIntegrationMethod" VALUE="DIRKOrder2" />
+                <I PROPERTY="AdvectionAdvancement"  VALUE="Implicit" />
+                <I PROPERTY="LinSysIterSolverTypeInNonlin" VALUE="GMRES" />
             </TIMELEVEL>
         </SOLVERINFO>
 
         <PARAMETERS>
             <TIMELEVEL VALUE="0">
-                <P> NumSteps       = 204800       </P>
-                <P> TimeStep       = 0.0002       </P>
-                <P> IO_InfoSteps   = 0            </P>
-                <P> IO_CheckSteps  = 0            </P>
-                <P> s              = 2.0          </P>
-                <P> kappa          = 1.0          </P>
-                <P> alpha          = 2.0          </P>
-                <P> PITIterMax     = 8            </P>
-                <P> PITToler       = 1e-15        </P>
+                <P> NumSteps       = 102400              </P>
+                <P> TimeStep       = 0.0005              </P>
+                <P> IO_InfoSteps   = 0                   </P>
+                <P> IO_CheckSteps  = NumSteps/64         </P>
+                <P> s              = 2.0                 </P>
+                <P> kappa          = 1.0                 </P>
+                <P> alpha          = 2.0                 </P>
+                <P> PITIterMax     = 8                   </P>
+                <P> PITToler       = 1e-16               </P>
+                <P> IterativeSolverTolerance  = 1.0E-14  </P>
             </TIMELEVEL>
             <TIMELEVEL VALUE="1">
-                <P> NumSteps       = 81920        </P>
-                <P> TimeStep       = 0.0005       </P>
-                <P> s              = 2.0          </P>
-                <P> kappa          = 1.0          </P>
-                <P> alpha          = 2.0          </P>
+                <P> NumSteps       = 512                 </P>
+                <P> TimeStep       = 0.1                 </P>
+                <P> IO_InfoSteps   = 0                   </P>
+                <P> IO_CheckSteps  = NumSteps/64         </P>
+                <P> s              = 2.0                 </P>
+                <P> kappa          = 1.0                 </P>
+                <P> alpha          = 2.0                 </P>
+                <P> IterativeSolverTolerance  = 1.0E-14  </P>
+                <P> NekNonlinSysMaxIterations = 30       </P>
+                <P> NewtonRelativeIteTol      = 1.0E-10  </P>
+                <P> NonlinIterTolRelativeL2   = 1.0E-10  </P>
+                <P> LinSysRelativeTolInNonlin = 1.0E-02  </P>
             </TIMELEVEL>
         </PARAMETERS>
 
