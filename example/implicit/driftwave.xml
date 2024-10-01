@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <NEKTAR>
-    <COLLECTIONS DEFAULT="auto" />
+    <COLLECTIONS DEFAULT="NoCollection" />
     <EXPANSIONS>
         <E COMPOSITE="C[0]" NUMMODES="4" TYPE="MODIFIED" FIELDS="zeta,n,phi" />
     </EXPANSIONS>
