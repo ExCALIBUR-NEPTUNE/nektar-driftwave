@@ -152,55 +152,16 @@ void DriftWaveSystem::v_InitObject(bool DeclareField)
     // continuous Galerkin this would be an assembly-type operation to ensure
     // C^0 connectivity). These are done again through callbacks.
     m_ode.DefineOdeRhs(&DriftWaveSystem::ExplicitTimeInt, this);
-    m_ode.DefineImplicitSolve(&DriftWaveSystem::ImplicitTimeInt, this);
     m_ode.DefineProjection(&DriftWaveSystem::DoOdeProjection, this);
 
     if (!m_explicitAdvection)
     {
-        InitialiseNonlinSysSolver();
+        m_implHelper = std::make_shared<ImplicitHelper>(
+            m_session, m_fields, m_ode, 2);
+        m_implHelper->InitialiseNonlinSysSolver();
+        m_ode.DefineImplicitSolve(
+            &ImplicitHelper::ImplicitTimeInt, m_implHelper);
     }
-}
-
-void DriftWaveSystem::InitialiseNonlinSysSolver()
-{
-    int ntotal = 2 * m_fields[0]->GetNpoints();
-
-    // Create the key to hold settings for nonlin solver
-    LibUtilities::NekSysKey key = LibUtilities::NekSysKey();
-
-    // Load required LinSys parameters:
-    m_session->LoadParameter("NekLinSysMaxIterations",
-                             key.m_NekLinSysMaxIterations, 30);
-    m_session->LoadParameter("LinSysMaxStorage", key.m_LinSysMaxStorage, 30);
-    m_session->LoadParameter("LinSysRelativeTolInNonlin",
-                             key.m_NekLinSysTolerance, 5.0E-2);
-    m_session->LoadParameter("GMRESMaxHessMatBand", key.m_KrylovMaxHessMatBand,
-                             31);
-
-    // Load required NonLinSys parameters:
-    m_session->LoadParameter("JacobiFreeEps", m_jacobiFreeEps, 5.0E-8);
-    m_session->LoadParameter("NekNonlinSysMaxIterations",
-                             key.m_NekNonlinSysMaxIterations, 10);
-    m_session->LoadParameter("NewtonRelativeIteTol",
-                             key.m_NekNonLinSysTolerance, 1.0E-12);
-    WARNINGL0(!m_session->DefinesParameter("NewtonAbsoluteIteTol"),
-              "Please specify NewtonRelativeIteTol instead of "
-              "NewtonAbsoluteIteTol in XML session file");
-    m_session->LoadParameter("NonlinIterTolRelativeL2",
-                             key.m_NonlinIterTolRelativeL2, 1.0E-3);
-    m_session->LoadSolverInfo("LinSysIterSolverTypeInNonlin",
-                              key.m_LinSysIterSolverTypeInNonlin, "GMRES");
-
-    LibUtilities::NekSysOperators nekSysOp;
-    nekSysOp.DefineNekSysResEval(&DriftWaveSystem::NonlinSysEvaluator1D, this);
-    nekSysOp.DefineNekSysLhsEval(&DriftWaveSystem::MatrixMultiplyMatrixFree,
-                                 this);
-    nekSysOp.DefineNekSysPrecon(&DriftWaveSystem::DoNullPrecon, this);
-
-    // Initialize non-linear system
-    m_nonlinsol = LibUtilities::GetNekNonlinSysIterFactory().CreateInstance(
-        "Newton", m_session, m_comm->GetRowComm(), ntotal, key);
-    m_nonlinsol->SetSysOperators(nekSysOp);
 }
 
 /**
@@ -281,139 +242,6 @@ void DriftWaveSystem::ExplicitTimeInt(
     // Add source term -kappa * d(phi)/dy to n equation.
     Vmath::Svtvp(nPts, -m_kappa, m_driftVel[0], 1, outarray[1], 1, outarray[1],
                  1);
-}
-
-void DriftWaveSystem::ImplicitTimeInt(
-    const Array<OneD, const Array<OneD, NekDouble>> &inpnts,
-    Array<OneD, Array<OneD, NekDouble>> &outpnt, const NekDouble time,
-    const NekDouble lambda)
-{
-    m_TimeIntegLambda    = lambda;
-    m_bndEvaluateTime    = time;
-    unsigned int npoints = m_fields[0]->GetNpoints();
-
-    Array<OneD, NekDouble> inarray(2 * npoints);
-    Array<OneD, NekDouble> outarray(2 * npoints);
-    Array<OneD, NekDouble> tmp;
-
-    for (int i = 0; i < 2; ++i)
-    {
-        int noffset = i * npoints;
-        Vmath::Vcopy(npoints, inpnts[i], 1, tmp = inarray + noffset, 1);
-    }
-
-    ImplicitTimeInt1D(inarray, outarray);
-
-    for (int i = 0; i < 2; ++i)
-    {
-        int noffset = i * npoints;
-        Vmath::Vcopy(npoints, outarray + noffset, 1, outpnt[i], 1);
-    }
-}
-
-void DriftWaveSystem::ImplicitTimeInt1D(
-    const Array<OneD, const NekDouble> &inarray, Array<OneD, NekDouble> &out)
-{
-    CalcRefValues(inarray);
-
-    m_nonlinsol->SetRhsMagnitude(m_inArrayNorm);
-
-    m_TotNewtonIts += m_nonlinsol->SolveSystem(inarray.size(), inarray, out, 0);
-
-    m_TotLinIts += m_nonlinsol->GetNtotLinSysIts();
-
-    m_TotImpStages++;
-}
-
-void DriftWaveSystem::CalcRefValues(const Array<OneD, const NekDouble> &inarray)
-{
-    unsigned int npoints = m_fields[0]->GetNpoints();
-
-    Array<OneD, NekDouble> magnitdEstimat(2, 0.0);
-
-    for (int i = 0; i < 2; ++i)
-    {
-        int offset = i * npoints;
-        magnitdEstimat[i] =
-            Vmath::Dot(npoints, inarray + offset, inarray + offset);
-    }
-    m_comm->GetSpaceComm()->AllReduce(magnitdEstimat,
-                                      Nektar::LibUtilities::ReduceSum);
-
-    m_inArrayNorm = 0.0;
-    for (int i = 0; i < 2; ++i)
-    {
-        m_inArrayNorm += magnitdEstimat[i];
-    }
-}
-
-void DriftWaveSystem::NonlinSysEvaluator1D(
-    const Array<OneD, const NekDouble> &inarray, Array<OneD, NekDouble> &out,
-    [[maybe_unused]] const bool &flag)
-{
-    unsigned int npoints = m_fields[0]->GetNpoints();
-    Array<OneD, Array<OneD, NekDouble>> in2D(2);
-    Array<OneD, Array<OneD, NekDouble>> out2D(2);
-    for (int i = 0; i < 2; ++i)
-    {
-        int offset = i * npoints;
-        in2D[i]    = inarray + offset;
-        out2D[i]   = out + offset;
-    }
-    NonlinSysEvaluator(in2D, out2D);
-}
-
-void DriftWaveSystem::NonlinSysEvaluator(
-    const Array<OneD, const Array<OneD, NekDouble>> &inarray,
-    Array<OneD, Array<OneD, NekDouble>> &out)
-{
-    unsigned int npoints = m_fields[0]->GetNpoints();
-    Array<OneD, Array<OneD, NekDouble>> inpnts(2);
-    for (int i = 0; i < 2; ++i)
-    {
-        inpnts[i] = Array<OneD, NekDouble>(npoints, 0.0);
-    }
-
-    DoOdeProjection(inarray, inpnts, m_bndEvaluateTime);
-    ExplicitTimeInt(inpnts, out, m_bndEvaluateTime);
-
-    for (int i = 0; i < 2; ++i)
-    {
-        Vmath::Svtvp(npoints, -m_TimeIntegLambda, out[i], 1, inarray[i], 1,
-                     out[i], 1);
-        Vmath::Vsub(npoints, out[i], 1,
-                    m_nonlinsol->GetRefSourceVec() + i * npoints, 1, out[i], 1);
-    }
-}
-
-void DriftWaveSystem::MatrixMultiplyMatrixFree(
-    const Array<OneD, const NekDouble> &inarray, Array<OneD, NekDouble> &out,
-    [[maybe_unused]] const bool &flag)
-{
-    const Array<OneD, const NekDouble> solref = m_nonlinsol->GetRefSolution();
-    const Array<OneD, const NekDouble> resref = m_nonlinsol->GetRefResidual();
-
-    unsigned int ntotal   = inarray.size();
-    NekDouble magninarray = Vmath::Dot(ntotal, inarray, inarray);
-    m_comm->GetSpaceComm()->AllReduce(magninarray,
-                                      Nektar::LibUtilities::ReduceSum);
-    NekDouble eps =
-        m_jacobiFreeEps * sqrt((sqrt(m_inArrayNorm) + 1.0) / magninarray);
-
-    Array<OneD, NekDouble> solplus{ntotal};
-    Array<OneD, NekDouble> resplus{ntotal};
-
-    Vmath::Svtvp(ntotal, eps, inarray, 1, solref, 1, solplus, 1);
-    NonlinSysEvaluator1D(solplus, resplus, flag);
-    Vmath::Vsub(ntotal, resplus, 1, resref, 1, out, 1);
-    Vmath::Smul(ntotal, 1.0 / eps, out, 1, out, 1);
-}
-
-void DriftWaveSystem::DoNullPrecon(const Array<OneD, const NekDouble> &inarray,
-                                   Array<OneD, NekDouble> &outarray,
-                                   [[maybe_unused]] const bool &flag)
-{
-    Vmath::Vcopy(inarray.size(), inarray, 1, outarray, 1);
 }
 
 /**
