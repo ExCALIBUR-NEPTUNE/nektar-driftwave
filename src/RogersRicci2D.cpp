@@ -51,12 +51,14 @@ RogersRicci2D::RogersRicci2D(
       m_driftVel(2)
 {
     // Set up constants
+    /*
     m_c["B"] = c("omega_ci") * c("m_i") * c("q_E");
     m_c["c_s0"] = sqrt(c("T_e0") / c("m_i"));
     m_c["rho_s0"] = c("c_s0") / c("omega_ci");
     m_c["S_0n"] = 0.03 * c("n0") * c("c_s0") / c("R");
     m_c["S_0T"] = 0.03 * c("T_e0") * c("c_s0") / c("R");
     m_c["omega"] = 1.5 * c("R") / c("L_z");
+    */
 }
 
 void RogersRicci2D::v_InitObject(bool DeclareField)
@@ -209,8 +211,12 @@ void RogersRicci2D::ExplicitTimeInt(
 
     // Put advection term on the right hand side.
     const NekDouble rho_s0 = 1.2e-2;
-    const NekDouble r_s = 1.0; // can't find this in list of constants
-    const NekDouble L_s = 18.0; // not sure this is right -- not listed in table?
+    const NekDouble r_s = 20 * rho_s0; // can't find this in list of constants,
+                                       // stolen from rr.py... fingers crossed
+
+    // stolen from Ed/Owen's code, rr.py
+    const NekDouble Ls_boost = 2.0;
+    const NekDouble L_s = 0.5 * rho_s0 * Ls_boost; // maybe wrong
 
     for (i = 0; i < nPts; ++i)
     {
