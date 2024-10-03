@@ -35,6 +35,7 @@
 
 #include "RogersRicci2D.h"
 #include <MultiRegions/ContField.h>
+#include <SolverUtils/RiemannSolvers/RiemannSolver.h>
 
 namespace Nektar
 {
@@ -43,6 +44,52 @@ std::string RogersRicci2D::className =
     GetEquationSystemFactory().RegisterCreatorFunction(
         "RogersRicci2D", RogersRicci2D::create,
         "System for the Rogers-Ricci 2D system of equations.");
+
+class UpwindNeumannSolver : public SolverUtils::RiemannSolver
+{
+public:
+    UpwindNeumannSolver(const LibUtilities::SessionReaderSharedPtr &pSession) :
+        SolverUtils::RiemannSolver(pSession)
+    {
+    }
+
+    void SetNeumannIdx(std::set<std::size_t> idx)
+    {
+        m_neumannIdx = idx;
+    }
+
+protected:
+    std::set<std::size_t> m_neumannIdx;
+
+    void v_Solve(const int nDim,
+                 const Array<OneD, const Array<OneD, NekDouble>> &Fwd,
+                 const Array<OneD, const Array<OneD, NekDouble>> &Bwd,
+                 Array<OneD, Array<OneD, NekDouble>> &flux) final
+    {
+        ASSERTL1(CheckScalars("Vn"), "Vn not defined.");
+        const Array<OneD, NekDouble> &traceVel = m_scalars["Vn"]();
+
+        for (int j = 0; j < traceVel.size(); ++j)
+        {
+            const Array<OneD, const Array<OneD, NekDouble>> &tmp =
+                traceVel[j] >= 0 ? Fwd : Bwd;
+            for (int i = 0; i < Fwd.size(); ++i)
+            {
+                flux[i][j] = traceVel[j] * tmp[i][j];
+            }
+        }
+
+        // Overwrite Neumann conditions with a zero flux
+        for (auto &idx : m_neumannIdx)
+        {
+            for (int i = 0; i < Fwd.size(); ++i)
+            {
+                flux[i][idx] = 0.0;
+            }
+        }
+    }
+};
+
 
 RogersRicci2D::RogersRicci2D(
     const LibUtilities::SessionReaderSharedPtr &session,
@@ -96,9 +143,7 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
                 advName, advName);
             m_advObject->SetFluxVector(&RogersRicci2D::GetFluxVector, this);
 
-            m_session->LoadSolverInfo("UpwindType", riemName, "Upwind");
-            m_riemannSolver =
-                GetRiemannSolverFactory().CreateInstance(riemName, m_session);
+            m_riemannSolver = std::make_shared<UpwindNeumannSolver>(m_session);
             m_riemannSolver->SetScalar(
                 "Vn", &RogersRicci2D::GetNormalVelocity, this);
 
@@ -140,6 +185,43 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
     {
         m_r[i] = sqrt(m_x[i] * m_x[i] + m_y[i] * m_y[i]);
     }
+
+    // Figure out Neumann quadrature in trace
+    const Array<OneD, const int> &traceBndMap = m_fields[0]->GetTraceBndMap();
+    std::set<std::size_t> neumannIdx;
+    for (size_t n = 0, cnt = 0; n < (size_t)m_fields[0]->GetBndConditions().size(); ++n)
+    {
+        if (m_fields[0]->GetBndConditions()[n]->GetBoundaryConditionType() ==
+            SpatialDomains::ePeriodic)
+        {
+            continue;
+        }
+
+        int nExp = m_fields[0]->GetBndCondExpansions()[n]->GetExpSize();
+
+        if (m_fields[0]->GetBndConditions()[n]->GetBoundaryConditionType() !=
+            SpatialDomains::eNeumann)
+        {
+            cnt += nExp;
+            continue;
+        }
+
+        for (int e = 0; e < nExp; ++e)
+        {
+            auto nBCEdgePts = m_fields[0]
+                ->GetBndCondExpansions()[n]->GetExp(e)->GetTotPoints();
+
+            auto id = m_fields[0]->GetTrace()->GetPhys_Offset(traceBndMap[cnt + e]);
+            for (int q = 0; q < nBCEdgePts; ++q)
+            {
+                neumannIdx.insert(id+q);
+            }
+        }
+
+        cnt += nExp;
+    }
+
+    std::dynamic_pointer_cast<UpwindNeumannSolver>(m_riemannSolver)->SetNeumannIdx(neumannIdx);
 }
 
 /**
@@ -222,7 +304,7 @@ void RogersRicci2D::ExplicitTimeInt(
 
     for (i = 0; i < nPts; ++i)
     {
-        NekDouble et = exp(3 - phi[i] / T_e[i]);
+        NekDouble et = exp(3 - phi[i] / sqrt(T_e[i] * T_e[i] + 1e-4));
         NekDouble st = 0.03 * (1.0 - tanh((rho_s0 * m_r[i] - r_s) / L_s));
         outarray[0][i] = -40 * outarray[0][i] - 1.0/24.0 * et * n[i] + st;
         outarray[1][i] = -40 * outarray[1][i] - 1.0/36.0 * (1.71 * et - 0.71) * T_e[i] + st;

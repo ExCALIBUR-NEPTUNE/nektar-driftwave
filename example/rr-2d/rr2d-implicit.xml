@@ -2,7 +2,7 @@
 <NEKTAR>
     <COLLECTIONS DEFAULT="NoCollection" />
     <EXPANSIONS>
-        <E COMPOSITE="C[0]" NUMMODES="4" TYPE="MODIFIED" FIELDS="n,T_e,w,phi" />
+        <E COMPOSITE="C[0]" NUMMODES="3" TYPE="MODIFIED" FIELDS="n,T_e,w,phi" />
     </EXPANSIONS>
 
     <CONDITIONS>
@@ -15,8 +15,8 @@
 
         <PARAMETERS>
             <P> NumSteps       = 10000              </P>
-            <P> TimeStep       = 1e-4               </P>
-            <P> IO_InfoSteps   = 10                 </P>
+            <P> TimeStep       = 2e-3               </P>
+            <P> IO_InfoSteps   = 10                </P>
             <P> IO_CheckSteps  = 100                </P>
         </PARAMETERS>
 
@@ -33,9 +33,9 @@
 
         <BOUNDARYCONDITIONS>
             <REGION REF="0">
-                <N VAR="n"   VALUE="0" />
-                <N VAR="T_e" VALUE="0" />
-                <N VAR="w"   VALUE="0" />
+                <D VAR="n"   VALUE="1" />
+                <D VAR="T_e" VALUE="6e-4" />
+                <D VAR="w"   VALUE="0" />
                 <D VAR="phi" VALUE="0" />
             </REGION>
         </BOUNDARYCONDITIONS>
