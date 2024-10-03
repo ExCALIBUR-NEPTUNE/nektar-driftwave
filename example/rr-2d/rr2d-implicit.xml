@@ -9,15 +9,15 @@
         <SOLVERINFO>
             <I PROPERTY="EQTYPE" VALUE="RogersRicci2D" />
             <I PROPERTY="Projection" VALUE="DisContinuous" />
-            <I PROPERTY="TimeIntegrationMethod" VALUE="RungeKutta4" />
-            <I PROPERTY="AdvectionAdvancement"  VALUE="Explicit" />
+            <I PROPERTY="TimeIntegrationMethod" VALUE="DIRKOrder2" />
+            <I PROPERTY="AdvectionAdvancement"  VALUE="Implicit" />
         </SOLVERINFO>
 
         <PARAMETERS>
-            <P> NumSteps       = 10000                 </P>
-            <P> TimeStep       = 5e-6              </P>
-            <P> IO_InfoSteps   = 10                  </P>
-            <P> IO_CheckSteps  = 100                  </P>
+            <P> NumSteps       = 10000              </P>
+            <P> TimeStep       = 1e-4               </P>
+            <P> IO_InfoSteps   = 10                 </P>
+            <P> IO_CheckSteps  = 100                </P>
         </PARAMETERS>
 
         <VARIABLES>
@@ -42,7 +42,7 @@
 
         <FUNCTION NAME="InitialConditions">
             <E VAR="n"   VALUE="1" />
-            <E VAR="T_e" VALUE="1" />
+            <E VAR="T_e" VALUE="6e-4" />
             <E VAR="w"   VALUE="0" />
             <E VAR="phi" VALUE="0" />
         </FUNCTION>

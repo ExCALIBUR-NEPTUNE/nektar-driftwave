@@ -185,10 +185,12 @@ void RogersRicci2D::ExplicitTimeInt(
     StdRegions::ConstFactorMap factors;
     factors[StdRegions::eFactorLambda] = 0.0;
 
+    Vmath::Zero(m_fields[0]->GetNcoeffs(), m_fields[3]->UpdateCoeffs(), 1);
+
     // Solve for phi. Output of this routine is in coefficient (spectral) space,
     // so backwards transform to physical space since we'll need that for the
     // advection step & computing drift velocity.
-    m_fields[3]->HelmSolve(inarray[0], m_fields[3]->UpdateCoeffs(), factors);
+    m_fields[3]->HelmSolve(inarray[2], m_fields[3]->UpdateCoeffs(), factors);
     m_fields[3]->BwdTrans(m_fields[3]->GetCoeffs(), m_fields[3]->UpdatePhys());
 
     // Calculate drift velocity v_E: PhysDeriv takes input and computes spatial
@@ -200,7 +202,7 @@ void RogersRicci2D::ExplicitTimeInt(
     // like negating entries in a vector.
     Vmath::Neg(nPts, m_driftVel[1], 1);
 
-    // Do advection for zeta, n. The hard-coded '2' here indicates that we
+    // Do advection for zeta, n. The hard-coded '3' here indicates that we
     // should only advect the first two components of inarray.
     m_advObject->Advect(3, m_fields, m_driftVel, inarray, outarray, time);
 
@@ -221,10 +223,10 @@ void RogersRicci2D::ExplicitTimeInt(
     for (i = 0; i < nPts; ++i)
     {
         NekDouble et = exp(3 - phi[i] / T_e[i]);
-        NekDouble st = 0.03 * (1.0 - tanh(rho_s0 * m_r[i] - r_s) / L_s);
-        outarray[0][i] = -40 * outarray[0][i] - 1.0/24.0 * et * n[i] + st; // add source term
-        outarray[1][i] = -40 * outarray[1][i] - 1.0/36.0 * (1.71 * et - 0.71) * T_e[i] + st; // add source term
-        outarray[2][i] = -40 * outarray[2][i] + 1.0/24.0 * (1 - et); // should be ok
+        NekDouble st = 0.03 * (1.0 - tanh((rho_s0 * m_r[i] - r_s) / L_s));
+        outarray[0][i] = -40 * outarray[0][i] - 1.0/24.0 * et * n[i] + st;
+        outarray[1][i] = -40 * outarray[1][i] - 1.0/36.0 * (1.71 * et - 0.71) * T_e[i] + st;
+        outarray[2][i] = -40 * outarray[2][i] + 1.0/24.0 * (1 - et);
     }
 }
 
