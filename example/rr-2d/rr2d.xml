@@ -14,7 +14,7 @@
         </SOLVERINFO>
 
         <PARAMETERS>
-            <P> NumSteps       = 100                 </P>
+            <P> NumSteps       = 1000                 </P>
             <P> TimeStep       = 5e-6              </P>
             <P> IO_InfoSteps   = 10                  </P>
             <P> IO_CheckSteps  = 10                  </P>
@@ -41,8 +41,8 @@
         </BOUNDARYCONDITIONS>
 
         <FUNCTION NAME="InitialConditions">
-            <E VAR="n"   VALUE="0" />
-            <E VAR="T_e" VALUE="0" />
+            <E VAR="n"   VALUE="1" />
+            <E VAR="T_e" VALUE="1" />
             <E VAR="w"   VALUE="0" />
             <E VAR="phi" VALUE="0" />
         </FUNCTION>
