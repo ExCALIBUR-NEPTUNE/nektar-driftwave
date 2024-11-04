@@ -1,4 +1,4 @@
-ARG NEKTAR_VERSION=v5.5.0
+ARG NEKTAR_VERSION=v5.6.0
 
 FROM nektarpp/nektar-dev:${NEKTAR_VERSION}
 

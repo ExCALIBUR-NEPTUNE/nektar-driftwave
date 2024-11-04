@@ -6,7 +6,7 @@ services:
     build: 
       context: .
       args:
-        - NEKTAR_VERSION=v5.5.0
+        - NEKTAR_VERSION=v5.6.0
     container_name: nektar-driftwave
     # Keep container alive
     entrypoint: "tail -f /dev/null"
