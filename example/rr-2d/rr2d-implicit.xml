@@ -33,16 +33,16 @@
 
         <BOUNDARYCONDITIONS>
             <REGION REF="0">
-                <D VAR="n"   VALUE="1" />
-                <D VAR="T_e" VALUE="6e-4" />
+                <D VAR="n"   VALUE="1e-4" />
+                <D VAR="T_e" VALUE="1e-4" />
                 <D VAR="w"   VALUE="0" />
                 <D VAR="phi" VALUE="0" />
             </REGION>
         </BOUNDARYCONDITIONS>
 
         <FUNCTION NAME="InitialConditions">
-            <E VAR="n"   VALUE="1" />
-            <E VAR="T_e" VALUE="6e-4" />
+            <E VAR="n"   VALUE="1e-4" />
+            <E VAR="T_e" VALUE="1e-4" />
             <E VAR="w"   VALUE="0" />
             <E VAR="phi" VALUE="0" />
         </FUNCTION>
