@@ -14,7 +14,7 @@
         </SOLVERINFO>
 
         <PARAMETERS>
-            <P> NumSteps       = 10000              </P>
+            <P> NumSteps       = 100000              </P>
             <P> TimeStep       = 2e-3               </P>
             <P> IO_InfoSteps   = 10                </P>
             <P> IO_CheckSteps  = 100                </P>
