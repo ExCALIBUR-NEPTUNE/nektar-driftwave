@@ -36,7 +36,7 @@
                 <D VAR="n"   VALUE="1e-4" />
                 <D VAR="T_e" VALUE="1e-4" />
                 <D VAR="w"   VALUE="0" />
-                <D VAR="phi" VALUE="0" />
+                <D VAR="phi" VALUE="0.03" />
             </REGION>
         </BOUNDARYCONDITIONS>
 
@@ -44,7 +44,7 @@
             <E VAR="n"   VALUE="1e-4" />
             <E VAR="T_e" VALUE="1e-4" />
             <E VAR="w"   VALUE="0" />
-            <E VAR="phi" VALUE="0" />
+            <E VAR="phi" VALUE="0.03" />
         </FUNCTION>
     </CONDITIONS>
 </NEKTAR>
