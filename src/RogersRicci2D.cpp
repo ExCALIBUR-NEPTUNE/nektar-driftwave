@@ -48,8 +48,8 @@ std::string RogersRicci2D::className =
 class UpwindNeumannSolver : public SolverUtils::RiemannSolver
 {
 public:
-    UpwindNeumannSolver(const LibUtilities::SessionReaderSharedPtr &pSession) :
-        SolverUtils::RiemannSolver(pSession)
+    UpwindNeumannSolver(const LibUtilities::SessionReaderSharedPtr &pSession)
+        : SolverUtils::RiemannSolver(pSession)
     {
     }
 
@@ -89,7 +89,6 @@ protected:
         }
     }
 };
-
 
 RogersRicci2D::RogersRicci2D(
     const LibUtilities::SessionReaderSharedPtr &session,
@@ -144,8 +143,8 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
             m_advObject->SetFluxVector(&RogersRicci2D::GetFluxVector, this);
 
             m_riemannSolver = std::make_shared<UpwindNeumannSolver>(m_session);
-            m_riemannSolver->SetScalar(
-                "Vn", &RogersRicci2D::GetNormalVelocity, this);
+            m_riemannSolver->SetScalar("Vn", &RogersRicci2D::GetNormalVelocity,
+                                       this);
 
             // Tell the advection object about the Riemann solver to use, and
             // then get it set up.
@@ -167,29 +166,30 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
 
     if (!m_explicitAdvection)
     {
-        m_implHelper = std::make_shared<ImplicitHelper>(
-            m_session, m_fields, m_ode, 3);
+        m_implHelper =
+            std::make_shared<ImplicitHelper>(m_session, m_fields, m_ode, 3);
         m_implHelper->InitialiseNonlinSysSolver();
-        m_ode.DefineImplicitSolve(
-            &ImplicitHelper::ImplicitTimeInt, m_implHelper);
+        m_ode.DefineImplicitSolve(&ImplicitHelper::ImplicitTimeInt,
+                                  m_implHelper);
     }
 
-    const int nPts = m_fields[0]->GetNpoints();
-    m_x = Array<OneD, NekDouble>(nPts);
-    m_y = Array<OneD, NekDouble>(nPts);
-    m_r = Array<OneD, NekDouble>(nPts);
+    const int nPts           = m_fields[0]->GetNpoints();
+    Array<OneD, NekDouble> x = Array<OneD, NekDouble>(nPts);
+    Array<OneD, NekDouble> y = Array<OneD, NekDouble>(nPts);
+    m_r                      = Array<OneD, NekDouble>(nPts);
 
-    m_fields[0]->GetCoords(m_x, m_y);
+    m_fields[0]->GetCoords(x, y);
 
     for (int i = 0; i < nPts; ++i)
     {
-        m_r[i] = sqrt(m_x[i] * m_x[i] + m_y[i] * m_y[i]);
+        m_r[i] = sqrt(x[i] * x[i] + y[i] * y[i]);
     }
 
     // Figure out Neumann quadrature in trace
     const Array<OneD, const int> &traceBndMap = m_fields[0]->GetTraceBndMap();
     std::set<std::size_t> neumannIdx;
-    for (size_t n = 0, cnt = 0; n < (size_t)m_fields[0]->GetBndConditions().size(); ++n)
+    for (size_t n = 0, cnt = 0;
+         n < (size_t)m_fields[0]->GetBndConditions().size(); ++n)
     {
         if (m_fields[0]->GetBndConditions()[n]->GetBoundaryConditionType() ==
             SpatialDomains::ePeriodic)
@@ -209,19 +209,23 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
         for (int e = 0; e < nExp; ++e)
         {
             auto nBCEdgePts = m_fields[0]
-                ->GetBndCondExpansions()[n]->GetExp(e)->GetTotPoints();
+                                  ->GetBndCondExpansions()[n]
+                                  ->GetExp(e)
+                                  ->GetTotPoints();
 
-            auto id = m_fields[0]->GetTrace()->GetPhys_Offset(traceBndMap[cnt + e]);
+            auto id =
+                m_fields[0]->GetTrace()->GetPhys_Offset(traceBndMap[cnt + e]);
             for (int q = 0; q < nBCEdgePts; ++q)
             {
-                neumannIdx.insert(id+q);
+                neumannIdx.insert(id + q);
             }
         }
 
         cnt += nExp;
     }
 
-    std::dynamic_pointer_cast<UpwindNeumannSolver>(m_riemannSolver)->SetNeumannIdx(neumannIdx);
+    std::dynamic_pointer_cast<UpwindNeumannSolver>(m_riemannSolver)
+        ->SetNeumannIdx(neumannIdx);
 }
 
 /**
@@ -288,9 +292,9 @@ void RogersRicci2D::ExplicitTimeInt(
     // should only advect the first two components of inarray.
     m_advObject->Advect(3, m_fields, m_driftVel, inarray, outarray, time);
 
-    Array<OneD, NekDouble> n = inarray[0];
+    Array<OneD, NekDouble> n   = inarray[0];
     Array<OneD, NekDouble> T_e = inarray[1];
-    Array<OneD, NekDouble> w = inarray[2];
+    Array<OneD, NekDouble> w   = inarray[2];
     Array<OneD, NekDouble> phi = m_fields[3]->UpdatePhys();
 
     // Put advection term on the right hand side.
@@ -300,15 +304,16 @@ void RogersRicci2D::ExplicitTimeInt(
 
     // stolen from Ed/Owen's code, rr.py
     const NekDouble Ls_boost = 2.0;
-    const NekDouble L_s = 0.5 * rho_s0 * Ls_boost; // maybe wrong
+    const NekDouble L_s      = 0.5 * rho_s0 * Ls_boost; // maybe wrong
 
     for (i = 0; i < nPts; ++i)
     {
-        NekDouble et = exp(3 - phi[i] / sqrt(T_e[i] * T_e[i] + 1e-4));
-        NekDouble st = 0.03 * (1.0 - tanh((rho_s0 * m_r[i] - r_s) / L_s));
-        outarray[0][i] = -40 * outarray[0][i] - 1.0/24.0 * et * n[i] + st;
-        outarray[1][i] = -40 * outarray[1][i] - 1.0/36.0 * (1.71 * et - 0.71) * T_e[i] + st;
-        outarray[2][i] = -40 * outarray[2][i] + 1.0/24.0 * (1 - et);
+        NekDouble et   = exp(3 - phi[i] / sqrt(T_e[i] * T_e[i] + 1e-4));
+        NekDouble st   = 0.03 * (1.0 - tanh((rho_s0 * m_r[i] - r_s) / L_s));
+        outarray[0][i] = -40 * outarray[0][i] - 1.0 / 24.0 * et * n[i] + st;
+        outarray[1][i] = -40 * outarray[1][i] -
+                         1.0 / 36.0 * (1.71 * et - 0.71) * T_e[i] + st;
+        outarray[2][i] = -40 * outarray[2][i] + 1.0 / 24.0 * (1 - et);
     }
 }
 
