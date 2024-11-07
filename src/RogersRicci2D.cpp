@@ -94,7 +94,7 @@ RogersRicci2D::RogersRicci2D(
     const LibUtilities::SessionReaderSharedPtr &session,
     const SpatialDomains::MeshGraphSharedPtr &graph)
     : UnsteadySystem(session, graph), AdvectionSystem(session, graph),
-      m_driftVel(2)
+      m_driftVel(3)
 {
     // Set up constants
     /*
@@ -135,6 +135,11 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
              "Incorrect number of variables detected (expected 4): check your "
              "session file.");
 
+    // Store mesh dimension for easy retrieval later.
+    m_ndims = m_graph->GetMeshDimension();
+    ASSERTL0(m_ndims == 2 || m_ndims == 3,
+             "Solver only supports 2D or 3D meshes.");
+
     // Check variable order is as expected
     check_var_idx(m_session, n_idx, "n");
     check_var_idx(m_session, Te_idx, "T_e");
@@ -151,7 +156,7 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
     m_intVariables = {n_idx, Te_idx, w_idx};
 
     // Assign storage for drift velocity.
-    for (int i = 0; i < 2; ++i)
+    for (int i = 0; i < m_driftVel.size(); ++i)
     {
         m_driftVel[i] = Array<OneD, NekDouble>(m_npts, 0.0);
     }
@@ -197,8 +202,8 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
 
     if (!m_explicitAdvection)
     {
-        m_implHelper =
-            std::make_shared<ImplicitHelper>(m_session, m_fields, m_ode, 3);
+        m_implHelper = std::make_shared<ImplicitHelper>(
+            m_session, m_fields, m_ode, m_intVariables.size());
         m_implHelper->InitialiseNonlinSysSolver();
         m_ode.DefineImplicitSolve(&ImplicitHelper::ImplicitTimeInt,
                                   m_implHelper);
@@ -209,7 +214,15 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
     Array<OneD, NekDouble> x = Array<OneD, NekDouble>(m_npts);
     Array<OneD, NekDouble> y = Array<OneD, NekDouble>(m_npts);
     m_r                      = Array<OneD, NekDouble>(m_npts);
-    m_fields[0]->GetCoords(x, y);
+    if (m_ndims == 3)
+    {
+        Array<OneD, NekDouble> z = Array<OneD, NekDouble>(m_npts);
+        m_fields[0]->GetCoords(x, y, z);
+    }
+    else
+    {
+        m_fields[0]->GetCoords(x, y);
+    }
     for (int i = 0; i < m_npts; ++i)
     {
         m_r[i] = sqrt(x[i] * x[i] + y[i] * y[i]);
@@ -315,8 +328,9 @@ void RogersRicci2D::ExplicitTimeInt(
 
     // Calculate drift velocity v_E: PhysDeriv takes input and computes spatial
     // derivatives.
+    Array<OneD, NekDouble> dummy = Array<OneD, NekDouble>(m_npts);
     m_fields[phi_idx]->PhysDeriv(m_fields[phi_idx]->GetPhys(), m_driftVel[1],
-                                 m_driftVel[0]);
+                                 m_driftVel[0], dummy);
 
     // We frequently use vector math (Vmath) routines for one-line operations
     // like negating entries in a vector.
@@ -411,7 +425,7 @@ Array<OneD, NekDouble> &RogersRicci2D::GetNormalVelocity()
 
     // Compute dot product of velocity along trace with trace normals. Store in
     // m_traceVn.
-    for (int i = 0; i < m_driftVel.size(); ++i)
+    for (int i = 0; i < m_ndims; ++i)
     {
         m_fields[0]->ExtractTracePhys(m_driftVel[i], tmp);
 
