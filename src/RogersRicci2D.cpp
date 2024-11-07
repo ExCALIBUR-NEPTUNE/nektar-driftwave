@@ -123,7 +123,7 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
     // Assign storage for drift velocity.
     for (int i = 0; i < 2; ++i)
     {
-        m_driftVel[i] = Array<OneD, NekDouble>(m_fields[i]->GetNpoints());
+        m_driftVel[i] = Array<OneD, NekDouble>(m_fields[0]->GetNpoints(), 0.0);
     }
 
     switch (m_projectionType)
