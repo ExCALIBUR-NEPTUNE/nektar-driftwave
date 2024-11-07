@@ -107,6 +107,15 @@ RogersRicci2D::RogersRicci2D(
     */
 }
 
+void check_var_idx(const LibUtilities::SessionReaderSharedPtr session,
+                   const int &idx, const std::string var_name)
+{
+    std::stringstream err;
+    err << "Expected variable index " << idx << " to correspond to '"
+        << var_name << "'. Check your session file.";
+    ASSERTL0(session->GetVariable(idx).compare(var_name) == 0, err.str());
+}
+
 void RogersRicci2D::v_InitObject(bool DeclareField)
 {
     AdvectionSystem::v_InitObject(DeclareField);
@@ -115,9 +124,16 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
              "Incorrect number of variables detected (expected 4): check your "
              "session file.");
 
-    m_fields[3] = MemoryManager<MultiRegions::ContField>::AllocateSharedPtr(
-        m_session, m_graph, m_session->GetVariable(3), true, true);
-    m_intVariables = {0, 1, 2};
+    // Check variable order is as expected
+    check_var_idx(m_session, n_idx, "n");
+    check_var_idx(m_session, Te_idx, "T_e");
+    check_var_idx(m_session, w_idx, "w");
+    check_var_idx(m_session, phi_idx, "phi");
+
+    m_fields[phi_idx] =
+        MemoryManager<MultiRegions::ContField>::AllocateSharedPtr(
+            m_session, m_graph, m_session->GetVariable(phi_idx), true, true);
+    m_intVariables = {n_idx, Te_idx, w_idx};
 
     // Assign storage for drift velocity.
     for (int i = 0; i < 2; ++i)
@@ -271,18 +287,21 @@ void RogersRicci2D::ExplicitTimeInt(
     StdRegions::ConstFactorMap factors;
     factors[StdRegions::eFactorLambda] = 0.0;
 
-    Vmath::Zero(m_fields[0]->GetNcoeffs(), m_fields[3]->UpdateCoeffs(), 1);
+    Vmath::Zero(m_fields[phi_idx]->GetNcoeffs(),
+                m_fields[phi_idx]->UpdateCoeffs(), 1);
 
     // Solve for phi. Output of this routine is in coefficient (spectral) space,
     // so backwards transform to physical space since we'll need that for the
     // advection step & computing drift velocity.
-    m_fields[3]->HelmSolve(inarray[2], m_fields[3]->UpdateCoeffs(), factors);
-    m_fields[3]->BwdTrans(m_fields[3]->GetCoeffs(), m_fields[3]->UpdatePhys());
+    m_fields[phi_idx]->HelmSolve(inarray[w_idx],
+                                 m_fields[phi_idx]->UpdateCoeffs(), factors);
+    m_fields[phi_idx]->BwdTrans(m_fields[phi_idx]->GetCoeffs(),
+                                m_fields[phi_idx]->UpdatePhys());
 
     // Calculate drift velocity v_E: PhysDeriv takes input and computes spatial
     // derivatives.
-    m_fields[3]->PhysDeriv(m_fields[3]->GetPhys(), m_driftVel[1],
-                           m_driftVel[0]);
+    m_fields[phi_idx]->PhysDeriv(m_fields[phi_idx]->GetPhys(), m_driftVel[1],
+                                 m_driftVel[0]);
 
     // We frequently use vector math (Vmath) routines for one-line operations
     // like negating entries in a vector.
@@ -292,10 +311,10 @@ void RogersRicci2D::ExplicitTimeInt(
     // should only advect the first two components of inarray.
     m_advObject->Advect(3, m_fields, m_driftVel, inarray, outarray, time);
 
-    Array<OneD, NekDouble> n   = inarray[0];
-    Array<OneD, NekDouble> T_e = inarray[1];
-    Array<OneD, NekDouble> w   = inarray[2];
-    Array<OneD, NekDouble> phi = m_fields[3]->UpdatePhys();
+    Array<OneD, NekDouble> n   = inarray[n_idx];
+    Array<OneD, NekDouble> T_e = inarray[Te_idx];
+    Array<OneD, NekDouble> w   = inarray[w_idx];
+    Array<OneD, NekDouble> phi = m_fields[phi_idx]->UpdatePhys();
 
     // Put advection term on the right hand side.
     const NekDouble rho_s0 = 1.2e-2;
@@ -308,12 +327,13 @@ void RogersRicci2D::ExplicitTimeInt(
 
     for (i = 0; i < nPts; ++i)
     {
-        NekDouble et   = exp(3 - phi[i] / sqrt(T_e[i] * T_e[i] + 1e-4));
-        NekDouble st   = 0.03 * (1.0 - tanh((rho_s0 * m_r[i] - r_s) / L_s));
-        outarray[0][i] = -40 * outarray[0][i] - 1.0 / 24.0 * et * n[i] + st;
-        outarray[1][i] = -40 * outarray[1][i] -
-                         1.0 / 36.0 * (1.71 * et - 0.71) * T_e[i] + st;
-        outarray[2][i] = -40 * outarray[2][i] + 1.0 / 24.0 * (1 - et);
+        NekDouble et = exp(3 - phi[i] / sqrt(T_e[i] * T_e[i] + 1e-4));
+        NekDouble st = 0.03 * (1.0 - tanh((rho_s0 * m_r[i] - r_s) / L_s));
+        outarray[n_idx][i] =
+            -40 * outarray[n_idx][i] - 1.0 / 24.0 * et * n[i] + st;
+        outarray[Te_idx][i] = -40 * outarray[Te_idx][i] -
+                              1.0 / 36.0 * (1.71 * et - 0.71) * T_e[i] + st;
+        outarray[w_idx][i] = -40 * outarray[w_idx][i] + 1.0 / 24.0 * (1 - et);
     }
 }
 

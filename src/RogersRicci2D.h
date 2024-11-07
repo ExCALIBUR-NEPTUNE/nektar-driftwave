@@ -72,6 +72,12 @@ public:
     /// create method above.
     static std::string className;
 
+    // Require a fixed variable order; use these indices for clarity
+    static constexpr int n_idx   = 0;
+    static constexpr int Te_idx  = 1;
+    static constexpr int w_idx   = 2;
+    static constexpr int phi_idx = 3;
+
     /// Default destructor.
     virtual ~RogersRicci2D() = default;
 
