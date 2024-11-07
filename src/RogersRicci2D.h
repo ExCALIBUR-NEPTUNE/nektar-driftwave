@@ -134,6 +134,8 @@ protected:
                        Array<OneD, Array<OneD, Array<OneD, NekDouble>>> &flux);
 
     Array<OneD, NekDouble> &GetNormalVelocity();
+
+    int m_npts;
 };
 
 } // namespace Nektar

@@ -116,6 +116,17 @@ void check_var_idx(const LibUtilities::SessionReaderSharedPtr session,
     ASSERTL0(session->GetVariable(idx).compare(var_name) == 0, err.str());
 }
 
+void check_field_sizes(Array<OneD, MultiRegions::ExpListSharedPtr> fields,
+                       const int npts)
+{
+    for (auto i = 0; i < fields.size(); i++)
+    {
+        ASSERTL0(fields[i]->GetNpoints() == npts,
+                 "Detected fields with different numbers of quadrature points; "
+                 "this solver assumes they're all the same");
+    }
+}
+
 void RogersRicci2D::v_InitObject(bool DeclareField)
 {
     AdvectionSystem::v_InitObject(DeclareField);
@@ -130,6 +141,10 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
     check_var_idx(m_session, w_idx, "w");
     check_var_idx(m_session, phi_idx, "phi");
 
+    // Check fields all have the same number of quad points
+    m_npts = m_fields[0]->GetNpoints();
+    check_field_sizes(m_fields, m_npts);
+
     m_fields[phi_idx] =
         MemoryManager<MultiRegions::ContField>::AllocateSharedPtr(
             m_session, m_graph, m_session->GetVariable(phi_idx), true, true);
@@ -138,7 +153,7 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
     // Assign storage for drift velocity.
     for (int i = 0; i < 2; ++i)
     {
-        m_driftVel[i] = Array<OneD, NekDouble>(m_fields[0]->GetNpoints(), 0.0);
+        m_driftVel[i] = Array<OneD, NekDouble>(m_npts, 0.0);
     }
 
     switch (m_projectionType)
@@ -189,14 +204,13 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
                                   m_implHelper);
     }
 
-    const int nPts           = m_fields[0]->GetNpoints();
-    Array<OneD, NekDouble> x = Array<OneD, NekDouble>(nPts);
-    Array<OneD, NekDouble> y = Array<OneD, NekDouble>(nPts);
-    m_r                      = Array<OneD, NekDouble>(nPts);
-
+    // Store distance of quad points from origin in transverse plane.
+    // (used to compute source terms)
+    Array<OneD, NekDouble> x = Array<OneD, NekDouble>(m_npts);
+    Array<OneD, NekDouble> y = Array<OneD, NekDouble>(m_npts);
+    m_r                      = Array<OneD, NekDouble>(m_npts);
     m_fields[0]->GetCoords(x, y);
-
-    for (int i = 0; i < nPts; ++i)
+    for (int i = 0; i < m_npts; ++i)
     {
         m_r[i] = sqrt(x[i] * x[i] + y[i] * y[i]);
     }
@@ -279,7 +293,7 @@ void RogersRicci2D::ExplicitTimeInt(
 {
     // nPts below corresponds to the total number of solution/integration
     // points: i.e. number of elements * quadrature points per element.
-    int i, nPts = GetNpoints();
+    int i;
 
     // Set up factors for electrostatic potential solve. We support a generic
     // Helmholtz solve of the form (\nabla^2 - \lambda) u = f, so this sets
@@ -305,7 +319,7 @@ void RogersRicci2D::ExplicitTimeInt(
 
     // We frequently use vector math (Vmath) routines for one-line operations
     // like negating entries in a vector.
-    Vmath::Neg(nPts, m_driftVel[1], 1);
+    Vmath::Neg(m_npts, m_driftVel[1], 1);
 
     // Do advection for zeta, n. The hard-coded '3' here indicates that we
     // should only advect the first two components of inarray.
@@ -325,7 +339,7 @@ void RogersRicci2D::ExplicitTimeInt(
     const NekDouble Ls_boost = 2.0;
     const NekDouble L_s      = 0.5 * rho_s0 * Ls_boost; // maybe wrong
 
-    for (i = 0; i < nPts; ++i)
+    for (i = 0; i < m_npts; ++i)
     {
         NekDouble et = exp(3 - phi[i] / sqrt(T_e[i] * T_e[i] + 1e-4));
         NekDouble st = 0.03 * (1.0 - tanh((rho_s0 * m_r[i] - r_s) / L_s));
