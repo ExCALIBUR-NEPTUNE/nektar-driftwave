@@ -18,6 +18,10 @@
             <P> TimeStep       = 2e-3               </P>
             <P> IO_InfoSteps   = 10                </P>
             <P> IO_CheckSteps  = 100                </P>
+            <!-- For ICs set up -->
+            <P> zmin  = -18.0  </P>
+            <P> zsize  = 36.0  </P>
+            <P> zICs_omega = 2 </P>
         </PARAMETERS>
 
         <VARIABLES>
@@ -55,7 +59,7 @@
         </BOUNDARYCONDITIONS>
 
         <FUNCTION NAME="InitialConditions">
-            <E VAR="n"   VALUE="1e-4" />
+            <E VAR="n"   VALUE="1e-4*cos(zICs_omega*2*PI*(z-zmin)/zsize)" />
             <E VAR="T_e" VALUE="1e-4" />
             <E VAR="w"   VALUE="0" />
             <E VAR="phi" VALUE="0.03" />
