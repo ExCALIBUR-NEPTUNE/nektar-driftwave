@@ -299,7 +299,8 @@ void RogersRicci2D::ExplicitTimeInt(
     // Helmholtz solve of the form (\nabla^2 - \lambda) u = f, so this sets
     // \lambda to zero.
     StdRegions::ConstFactorMap factors;
-    factors[StdRegions::eFactorLambda] = 0.0;
+    factors[StdRegions::eFactorLambda]   = 0.0;
+    factors[StdRegions::eFactorCoeffD22] = 0.0;
 
     Vmath::Zero(m_fields[phi_idx]->GetNcoeffs(),
                 m_fields[phi_idx]->UpdateCoeffs(), 1);
