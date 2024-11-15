@@ -1,2 +1,7 @@
 Dockerfile
 docker-compose.yml
+
+.github
+build
+builds
+runs
