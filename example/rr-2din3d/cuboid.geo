@@ -8,7 +8,7 @@ ymin=-ysize/2;
 zmin=-zsize/2;
 nx = 64;
 ny = 64;
-nz = 23; // Make dz ~= dx,dy
+nz = 8; // Make dz ~= dx,dy
 //=============================================================================
 
 // Create a line of length <xsize> in the x-direction, with <nx> divisions
