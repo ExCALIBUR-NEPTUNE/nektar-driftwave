@@ -2,7 +2,7 @@
 <NEKTAR>
     <COLLECTIONS DEFAULT="NoCollection" />
     <EXPANSIONS>
-        <E COMPOSITE="C[0]" NUMMODES="3" TYPE="MODIFIED" FIELDS="n,T_e,w,phi" />
+        <E COMPOSITE="C[0]" NUMMODES="2" TYPE="MODIFIED" FIELDS="n,T_e,w,phi" />
     </EXPANSIONS>
 
     <CONDITIONS>
@@ -18,6 +18,10 @@
             <P> TimeStep       = 2e-3               </P>
             <P> IO_InfoSteps   = 10                </P>
             <P> IO_CheckSteps  = 100                </P>
+            <!-- For ICs set up -->
+            <P> zmin  = -18.0  </P>
+            <P> zsize  = 36.0  </P>
+            <P> zICs_omega = 2 </P>
         </PARAMETERS>
 
         <VARIABLES>
@@ -29,6 +33,8 @@
 
         <BOUNDARYREGIONS>
             <B ID="0"> C[1-4] </B>
+            <B ID="1"> C[5] </B>
+            <B ID="2"> C[6] </B>
         </BOUNDARYREGIONS>
 
         <BOUNDARYCONDITIONS>
@@ -38,10 +44,22 @@
                 <D VAR="w"   VALUE="0" />
                 <D VAR="phi" VALUE="0.03" />
             </REGION>
+            <REGION REF="1">
+                <P VAR="n"   VALUE="[2]" />
+                <P VAR="T_e" VALUE="[2]" />
+                <P VAR="w"   VALUE="[2]" />
+                <P VAR="phi" VALUE="[2]" />
+            </REGION>
+            <REGION REF="2">
+                <P VAR="n"   VALUE="[1]" />
+                <P VAR="T_e" VALUE="[1]" />
+                <P VAR="w"   VALUE="[1]" />
+                <P VAR="phi" VALUE="[1]" />
+            </REGION>
         </BOUNDARYCONDITIONS>
 
         <FUNCTION NAME="InitialConditions">
-            <E VAR="n"   VALUE="1e-4" />
+            <E VAR="n"   VALUE="1e-4*cos(zICs_omega*2*PI*(z-zmin)/zsize)" />
             <E VAR="T_e" VALUE="1e-4" />
             <E VAR="w"   VALUE="0" />
             <E VAR="phi" VALUE="0.03" />

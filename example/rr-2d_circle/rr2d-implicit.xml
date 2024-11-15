@@ -28,7 +28,7 @@
         </VARIABLES>
 
         <BOUNDARYREGIONS>
-            <B ID="0"> C[1-4] </B>
+            <B ID="0"> C[1] </B>
         </BOUNDARYREGIONS>
 
         <BOUNDARYCONDITIONS>

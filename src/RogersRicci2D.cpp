@@ -48,8 +48,8 @@ std::string RogersRicci2D::className =
 class UpwindNeumannSolver : public SolverUtils::RiemannSolver
 {
 public:
-    UpwindNeumannSolver(const LibUtilities::SessionReaderSharedPtr &pSession) :
-        SolverUtils::RiemannSolver(pSession)
+    UpwindNeumannSolver(const LibUtilities::SessionReaderSharedPtr &pSession)
+        : SolverUtils::RiemannSolver(pSession)
     {
     }
 
@@ -90,12 +90,11 @@ protected:
     }
 };
 
-
 RogersRicci2D::RogersRicci2D(
     const LibUtilities::SessionReaderSharedPtr &session,
     const SpatialDomains::MeshGraphSharedPtr &graph)
     : UnsteadySystem(session, graph), AdvectionSystem(session, graph),
-      m_driftVel(2)
+      m_driftVel(3)
 {
     // Set up constants
     /*
@@ -108,6 +107,26 @@ RogersRicci2D::RogersRicci2D(
     */
 }
 
+void check_var_idx(const LibUtilities::SessionReaderSharedPtr session,
+                   const int &idx, const std::string var_name)
+{
+    std::stringstream err;
+    err << "Expected variable index " << idx << " to correspond to '"
+        << var_name << "'. Check your session file.";
+    ASSERTL0(session->GetVariable(idx).compare(var_name) == 0, err.str());
+}
+
+void check_field_sizes(Array<OneD, MultiRegions::ExpListSharedPtr> fields,
+                       const int npts)
+{
+    for (auto i = 0; i < fields.size(); i++)
+    {
+        ASSERTL0(fields[i]->GetNpoints() == npts,
+                 "Detected fields with different numbers of quadrature points; "
+                 "this solver assumes they're all the same");
+    }
+}
+
 void RogersRicci2D::v_InitObject(bool DeclareField)
 {
     AdvectionSystem::v_InitObject(DeclareField);
@@ -116,14 +135,30 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
              "Incorrect number of variables detected (expected 4): check your "
              "session file.");
 
-    m_fields[3] = MemoryManager<MultiRegions::ContField>::AllocateSharedPtr(
-        m_session, m_graph, m_session->GetVariable(3), true, true);
-    m_intVariables = {0, 1, 2};
+    // Store mesh dimension for easy retrieval later.
+    m_ndims = m_graph->GetMeshDimension();
+    ASSERTL0(m_ndims == 2 || m_ndims == 3,
+             "Solver only supports 2D or 3D meshes.");
+
+    // Check variable order is as expected
+    check_var_idx(m_session, n_idx, "n");
+    check_var_idx(m_session, Te_idx, "T_e");
+    check_var_idx(m_session, w_idx, "w");
+    check_var_idx(m_session, phi_idx, "phi");
+
+    // Check fields all have the same number of quad points
+    m_npts = m_fields[0]->GetNpoints();
+    check_field_sizes(m_fields, m_npts);
+
+    m_fields[phi_idx] =
+        MemoryManager<MultiRegions::ContField>::AllocateSharedPtr(
+            m_session, m_graph, m_session->GetVariable(phi_idx), true, true);
+    m_intVariables = {n_idx, Te_idx, w_idx};
 
     // Assign storage for drift velocity.
-    for (int i = 0; i < 2; ++i)
+    for (int i = 0; i < m_driftVel.size(); ++i)
     {
-        m_driftVel[i] = Array<OneD, NekDouble>(m_fields[i]->GetNpoints());
+        m_driftVel[i] = Array<OneD, NekDouble>(m_npts, 0.0);
     }
 
     switch (m_projectionType)
@@ -144,8 +179,8 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
             m_advObject->SetFluxVector(&RogersRicci2D::GetFluxVector, this);
 
             m_riemannSolver = std::make_shared<UpwindNeumannSolver>(m_session);
-            m_riemannSolver->SetScalar(
-                "Vn", &RogersRicci2D::GetNormalVelocity, this);
+            m_riemannSolver->SetScalar("Vn", &RogersRicci2D::GetNormalVelocity,
+                                       this);
 
             // Tell the advection object about the Riemann solver to use, and
             // then get it set up.
@@ -168,28 +203,36 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
     if (!m_explicitAdvection)
     {
         m_implHelper = std::make_shared<ImplicitHelper>(
-            m_session, m_fields, m_ode, 3);
+            m_session, m_fields, m_ode, m_intVariables.size());
         m_implHelper->InitialiseNonlinSysSolver();
-        m_ode.DefineImplicitSolve(
-            &ImplicitHelper::ImplicitTimeInt, m_implHelper);
+        m_ode.DefineImplicitSolve(&ImplicitHelper::ImplicitTimeInt,
+                                  m_implHelper);
     }
 
-    const int nPts = m_fields[0]->GetNpoints();
-    m_x = Array<OneD, NekDouble>(nPts);
-    m_y = Array<OneD, NekDouble>(nPts);
-    m_r = Array<OneD, NekDouble>(nPts);
-
-    m_fields[0]->GetCoords(m_x, m_y);
-
-    for (int i = 0; i < nPts; ++i)
+    // Store distance of quad points from origin in transverse plane.
+    // (used to compute source terms)
+    Array<OneD, NekDouble> x = Array<OneD, NekDouble>(m_npts);
+    Array<OneD, NekDouble> y = Array<OneD, NekDouble>(m_npts);
+    m_r                      = Array<OneD, NekDouble>(m_npts);
+    if (m_ndims == 3)
     {
-        m_r[i] = sqrt(m_x[i] * m_x[i] + m_y[i] * m_y[i]);
+        Array<OneD, NekDouble> z = Array<OneD, NekDouble>(m_npts);
+        m_fields[0]->GetCoords(x, y, z);
+    }
+    else
+    {
+        m_fields[0]->GetCoords(x, y);
+    }
+    for (int i = 0; i < m_npts; ++i)
+    {
+        m_r[i] = sqrt(x[i] * x[i] + y[i] * y[i]);
     }
 
     // Figure out Neumann quadrature in trace
     const Array<OneD, const int> &traceBndMap = m_fields[0]->GetTraceBndMap();
     std::set<std::size_t> neumannIdx;
-    for (size_t n = 0, cnt = 0; n < (size_t)m_fields[0]->GetBndConditions().size(); ++n)
+    for (size_t n = 0, cnt = 0;
+         n < (size_t)m_fields[0]->GetBndConditions().size(); ++n)
     {
         if (m_fields[0]->GetBndConditions()[n]->GetBoundaryConditionType() ==
             SpatialDomains::ePeriodic)
@@ -209,19 +252,23 @@ void RogersRicci2D::v_InitObject(bool DeclareField)
         for (int e = 0; e < nExp; ++e)
         {
             auto nBCEdgePts = m_fields[0]
-                ->GetBndCondExpansions()[n]->GetExp(e)->GetTotPoints();
+                                  ->GetBndCondExpansions()[n]
+                                  ->GetExp(e)
+                                  ->GetTotPoints();
 
-            auto id = m_fields[0]->GetTrace()->GetPhys_Offset(traceBndMap[cnt + e]);
+            auto id =
+                m_fields[0]->GetTrace()->GetPhys_Offset(traceBndMap[cnt + e]);
             for (int q = 0; q < nBCEdgePts; ++q)
             {
-                neumannIdx.insert(id+q);
+                neumannIdx.insert(id + q);
             }
         }
 
         cnt += nExp;
     }
 
-    std::dynamic_pointer_cast<UpwindNeumannSolver>(m_riemannSolver)->SetNeumannIdx(neumannIdx);
+    std::dynamic_pointer_cast<UpwindNeumannSolver>(m_riemannSolver)
+        ->SetNeumannIdx(neumannIdx);
 }
 
 /**
@@ -259,39 +306,44 @@ void RogersRicci2D::ExplicitTimeInt(
 {
     // nPts below corresponds to the total number of solution/integration
     // points: i.e. number of elements * quadrature points per element.
-    int i, nPts = GetNpoints();
+    int i;
 
     // Set up factors for electrostatic potential solve. We support a generic
     // Helmholtz solve of the form (\nabla^2 - \lambda) u = f, so this sets
     // \lambda to zero.
     StdRegions::ConstFactorMap factors;
-    factors[StdRegions::eFactorLambda] = 0.0;
+    factors[StdRegions::eFactorLambda]   = 0.0;
+    factors[StdRegions::eFactorCoeffD22] = 0.0;
 
-    Vmath::Zero(m_fields[0]->GetNcoeffs(), m_fields[3]->UpdateCoeffs(), 1);
+    Vmath::Zero(m_fields[phi_idx]->GetNcoeffs(),
+                m_fields[phi_idx]->UpdateCoeffs(), 1);
 
     // Solve for phi. Output of this routine is in coefficient (spectral) space,
     // so backwards transform to physical space since we'll need that for the
     // advection step & computing drift velocity.
-    m_fields[3]->HelmSolve(inarray[2], m_fields[3]->UpdateCoeffs(), factors);
-    m_fields[3]->BwdTrans(m_fields[3]->GetCoeffs(), m_fields[3]->UpdatePhys());
+    m_fields[phi_idx]->HelmSolve(inarray[w_idx],
+                                 m_fields[phi_idx]->UpdateCoeffs(), factors);
+    m_fields[phi_idx]->BwdTrans(m_fields[phi_idx]->GetCoeffs(),
+                                m_fields[phi_idx]->UpdatePhys());
 
     // Calculate drift velocity v_E: PhysDeriv takes input and computes spatial
     // derivatives.
-    m_fields[3]->PhysDeriv(m_fields[3]->GetPhys(), m_driftVel[1],
-                           m_driftVel[0]);
+    Array<OneD, NekDouble> dummy = Array<OneD, NekDouble>(m_npts);
+    m_fields[phi_idx]->PhysDeriv(m_fields[phi_idx]->GetPhys(), m_driftVel[1],
+                                 m_driftVel[0], dummy);
 
     // We frequently use vector math (Vmath) routines for one-line operations
     // like negating entries in a vector.
-    Vmath::Neg(nPts, m_driftVel[1], 1);
+    Vmath::Neg(m_npts, m_driftVel[1], 1);
 
     // Do advection for zeta, n. The hard-coded '3' here indicates that we
     // should only advect the first two components of inarray.
     m_advObject->Advect(3, m_fields, m_driftVel, inarray, outarray, time);
 
-    Array<OneD, NekDouble> n = inarray[0];
-    Array<OneD, NekDouble> T_e = inarray[1];
-    Array<OneD, NekDouble> w = inarray[2];
-    Array<OneD, NekDouble> phi = m_fields[3]->UpdatePhys();
+    Array<OneD, NekDouble> n   = inarray[n_idx];
+    Array<OneD, NekDouble> T_e = inarray[Te_idx];
+    Array<OneD, NekDouble> w   = inarray[w_idx];
+    Array<OneD, NekDouble> phi = m_fields[phi_idx]->UpdatePhys();
 
     // Put advection term on the right hand side.
     const NekDouble rho_s0 = 1.2e-2;
@@ -300,15 +352,17 @@ void RogersRicci2D::ExplicitTimeInt(
 
     // stolen from Ed/Owen's code, rr.py
     const NekDouble Ls_boost = 2.0;
-    const NekDouble L_s = 0.5 * rho_s0 * Ls_boost; // maybe wrong
+    const NekDouble L_s      = 0.5 * rho_s0 * Ls_boost; // maybe wrong
 
-    for (i = 0; i < nPts; ++i)
+    for (i = 0; i < m_npts; ++i)
     {
         NekDouble et = exp(3 - phi[i] / sqrt(T_e[i] * T_e[i] + 1e-4));
         NekDouble st = 0.03 * (1.0 - tanh((rho_s0 * m_r[i] - r_s) / L_s));
-        outarray[0][i] = -40 * outarray[0][i] - 1.0/24.0 * et * n[i] + st;
-        outarray[1][i] = -40 * outarray[1][i] - 1.0/36.0 * (1.71 * et - 0.71) * T_e[i] + st;
-        outarray[2][i] = -40 * outarray[2][i] + 1.0/24.0 * (1 - et);
+        outarray[n_idx][i] =
+            -40 * outarray[n_idx][i] - 1.0 / 24.0 * et * n[i] + st;
+        outarray[Te_idx][i] = -40 * outarray[Te_idx][i] -
+                              1.0 / 36.0 * (1.71 * et - 0.71) * T_e[i] + st;
+        outarray[w_idx][i] = -40 * outarray[w_idx][i] + 1.0 / 24.0 * (1 - et);
     }
 }
 
@@ -371,7 +425,7 @@ Array<OneD, NekDouble> &RogersRicci2D::GetNormalVelocity()
 
     // Compute dot product of velocity along trace with trace normals. Store in
     // m_traceVn.
-    for (int i = 0; i < m_driftVel.size(); ++i)
+    for (int i = 0; i < m_ndims; ++i)
     {
         m_fields[0]->ExtractTracePhys(m_driftVel[i], tmp);
 
