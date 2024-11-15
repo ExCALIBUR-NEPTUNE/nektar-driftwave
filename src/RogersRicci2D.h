@@ -136,6 +136,7 @@ protected:
     Array<OneD, NekDouble> &GetNormalVelocity();
 
     int m_npts;
+    int m_ndims;
 };
 
 } // namespace Nektar
