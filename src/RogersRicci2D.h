@@ -72,6 +72,12 @@ public:
     /// create method above.
     static std::string className;
 
+    // Require a fixed variable order; use these indices for clarity
+    static constexpr int n_idx   = 0;
+    static constexpr int Te_idx  = 1;
+    static constexpr int w_idx   = 2;
+    static constexpr int phi_idx = 3;
+
     /// Default destructor.
     virtual ~RogersRicci2D() = default;
 
@@ -88,14 +94,9 @@ protected:
 
     /// Map of known constants
     std::map<std::string, NekDouble> m_c = {
-        {"T_e", 6.0},
-        {"L_z", 18.0},
-        {"n_0", 2.0e18},
-        {"m_i", 6.67e-27},
-        {"omega_ci", 9.6e5},
-        {"lambda", 3.0},
-        {"R", 0.5}
-    };
+        {"T_e", 6.0},      {"L_z", 18.0},       {"n_0", 2.0e18},
+        {"m_i", 6.67e-27}, {"omega_ci", 9.6e5}, {"lambda", 3.0},
+        {"R", 0.5}};
 
     /// Storage for the drift velocity. The outer index is dimension, and inner
     /// index the solution nodes (in physical space).
@@ -112,7 +113,7 @@ protected:
     /// Helper object for fully-implicit solve.
     std::shared_ptr<ImplicitHelper> m_implHelper;
 
-    Array<OneD, NekDouble> m_x, m_y, m_r;
+    Array<OneD, NekDouble> m_r;
 
     /// Protected constructor. Since we use a factory pattern, objects should be
     /// constructed via the SolverUtils::EquationSystem factory.
@@ -133,6 +134,9 @@ protected:
                        Array<OneD, Array<OneD, Array<OneD, NekDouble>>> &flux);
 
     Array<OneD, NekDouble> &GetNormalVelocity();
+
+    int m_npts;
+    int m_ndims;
 };
 
 } // namespace Nektar
