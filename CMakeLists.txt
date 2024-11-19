@@ -26,6 +26,7 @@ SET(CMAKE_INSTALL_RPATH "${NEKTAR++_LIBRARY_DIRS}")
 ADD_EXECUTABLE(DriftWaveSolver
     src/DriftWaveSolver.cpp
     src/DriftWaveSystem.cpp
+    src/RogersRicci2D.cpp
     )
 
 # Add target link libraries.
