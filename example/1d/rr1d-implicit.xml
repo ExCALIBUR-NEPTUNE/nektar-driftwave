@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<NEKTAR>
+    <COLLECTIONS DEFAULT="NoCollection" />
+    <EXPANSIONS>
+        <E COMPOSITE="C[0]" NUMMODES="2" TYPE="MODIFIED" FIELDS="n,u" />
+    </EXPANSIONS>
+
+    <CONDITIONS>
+        <SOLVERINFO>
+            <I PROPERTY="EQTYPE" VALUE="RogersRicci1D" />
+            <I PROPERTY="Projection" VALUE="DisContinuous" />
+            <I PROPERTY="TimeIntegrationMethod" VALUE="DIRKOrder2" />
+            <I PROPERTY="AdvectionAdvancement"  VALUE="Implicit" />
+        </SOLVERINFO>
+
+        <PARAMETERS>
+            <P> NumSteps       = 20000  </P>
+            <P> TimeStep       = 10.0/NumSteps </P>
+            <P> IO_InfoSteps   = NumSteps+1   </P>
+            <P> IO_CheckSteps  = NumSteps/1000   </P>
+            <!-- ICs -->
+            <P> amp = 0.01 </P>
+            <P> width = 0.1 </P>
+            <!-- Model params -->
+            <P> nstar  = 2*0.03 </P>
+            <P> T  = 1.0        </P>
+            <P> tau  = 1.0        </P>
+            <!-- Derived params -->
+            <P> alpha = exp(-0.5/(tau*T))/(2*0.03) </P>
+        </PARAMETERS>
+
+        <VARIABLES>
+            <V ID="0"> n </V>
+            <V ID="1"> u </V>
+        </VARIABLES>
+
+        <BOUNDARYREGIONS>
+            <B ID="0"> C[1] </B>
+            <B ID="1"> C[2] </B>
+        </BOUNDARYREGIONS>
+        <BOUNDARYCONDITIONS>
+            <REGION REF="0">
+                <!-- <D VAR="n" VALUE="nstar" /> -->
+                <N VAR="n" VALUE="0" />
+                <D VAR="u" VALUE="-sqrt(T)" />
+            </REGION>
+            <REGION REF="1">
+                <!-- <D VAR="n" VALUE="nstar" /> -->
+                <N VAR="n" VALUE="0" />
+                <D VAR="u" VALUE="sqrt(T)" />
+            </REGION>
+        </BOUNDARYCONDITIONS>
+
+        <FUNCTION NAME="ExactSolution">
+            <E VAR="n"   VALUE="(nstar/sqrt(T))*(1+sqrt(1-x*x))" />
+            <E VAR="u" VALUE="(sqrt(T)/x)*(1-sqrt(1-x*x))" />
+        </FUNCTION>
+
+        <FUNCTION NAME="InitialConditions">
+            <E VAR="n"   VALUE="nstar+amp*(1/sqrt(2*PI*width*width))*exp(-x*x/(2*width*width))" />
+            <E VAR="u" VALUE="x" />
+        </FUNCTION>
+    </CONDITIONS>
+</NEKTAR>
