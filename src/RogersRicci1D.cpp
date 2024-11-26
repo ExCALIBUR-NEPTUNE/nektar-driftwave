@@ -29,12 +29,12 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //
-// Description: Image warping solve routines
+// Description: A greatly simplified version of the Rogers & Ricci system framed
+// as a 1D problem.
 //
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "RogersRicci1D.h"
-#include <MultiRegions/ContField.h>
 #include <SolverUtils/RiemannSolvers/RiemannSolver.h>
 
 namespace Nektar
@@ -43,6 +43,81 @@ std::string RogersRicci1D::className =
     GetEquationSystemFactory().RegisterCreatorFunction(
         "RogersRicci1D", RogersRicci1D::create,
         "System for the Rogers-Ricci 1D system of equations.");
+
+class CustomUpwindSolver : public SolverUtils::RiemannSolver
+{
+public:
+    static RiemannSolverSharedPtr create(
+        const LibUtilities::SessionReaderSharedPtr &pSession)
+    {
+        return RiemannSolverSharedPtr(new CustomUpwindSolver(pSession));
+    }
+
+    static std::string solver_name;
+
+    CustomUpwindSolver(const LibUtilities::SessionReaderSharedPtr &pSession)
+        : SolverUtils::RiemannSolver(pSession)
+    {
+    }
+
+protected:
+    virtual void v_Solve(
+        const int nDim, const Array<OneD, const Array<OneD, NekDouble>> &Fwd,
+        const Array<OneD, const Array<OneD, NekDouble>> &Bwd,
+        Array<OneD, Array<OneD, NekDouble>> &flux) override final
+    {
+        for (int j = 0; j < Fwd[0].size(); ++j)
+        {
+            // Field variables
+            NekDouble n_L = Fwd[0][j];
+            NekDouble u_L = Fwd[1][j];
+            NekDouble n_R = Bwd[0][j];
+            NekDouble u_R = Bwd[1][j];
+
+            // const temperature == c_s
+            NekDouble T = 1.0;
+
+            // sound speed
+            NekDouble a = sqrt(T);
+
+            if (j == 0)
+            {
+                n_R = n_L;  // zero Neumann
+                u_R = -1.0; // Dirichlet
+            }
+            else if (j == 1)
+            {
+                n_R = n_L; // zero Neumann
+                u_R = 1.0; // Dirichlet
+            }
+
+            NekDouble flux_n_L = n_L * u_L;
+            NekDouble flux_n_R = n_R * u_R;
+            NekDouble flux_u_L = 0.5 * u_L * u_L + T * log(n_L);
+            NekDouble flux_u_R = 0.5 * u_R * u_R + T * log(n_R);
+
+            NekDouble C_L   = std::max(std::abs(u_L - a), std::abs(u_L + a));
+            NekDouble C_R   = std::max(std::abs(u_R - a), std::abs(u_R + a));
+            NekDouble alpha = std::max(C_L, C_R);
+
+            flux[0][j] =
+                0.5 * (flux_n_L + flux_n_R) - 0.5 * alpha * (n_R - n_L);
+            flux[1][j] =
+                0.5 * (flux_u_L + flux_u_R) - 0.5 * alpha * (u_R - u_L);
+
+            if (j == 0)
+            {
+                flux[0][j] *= -1.0;
+                flux[1][j] *= -1.0;
+            }
+        }
+    }
+};
+
+std::string CustomUpwindSolver::solver_name =
+    SolverUtils::GetRiemannSolverFactory().RegisterCreatorFunction(
+        "CustomUpwind", CustomUpwindSolver::create,
+        "Customised upwind solver for 1DRR");
 
 RogersRicci1D::RogersRicci1D(
     const LibUtilities::SessionReaderSharedPtr &session,
@@ -76,17 +151,8 @@ void RogersRicci1D::v_InitObject(bool DeclareField)
 
     switch (m_projectionType)
     {
-            // case MultiRegions::eGalerkin:
-            // {
-
-            //     break;
-            // }
-
         case MultiRegions::eDiscontinuous:
         {
-            // Make u continuous
-            m_fields[u_idx] = MemoryManager<MR::ContField>::AllocateSharedPtr(
-                m_session, m_graph, m_session->GetVariable(u_idx), true, true);
 
             // Do not forwards transform initial condition.
             m_homoInitialFwd = false;
@@ -122,8 +188,9 @@ void RogersRicci1D::v_InitObject(bool DeclareField)
             m_session->LoadSolverInfo("UpwindType", riemName, "Upwind");
             m_riemannSolver =
                 GetRiemannSolverFactory().CreateInstance(riemName, m_session);
-            m_riemannSolver->SetScalar("Vn", &RogersRicci1D::GetNormalVelocity,
-                                       this);
+            // m_riemannSolver->SetScalar("Vn",
+            // &RogersRicci1D::GetNormalVelocity,
+            //                            this);
 
             // Tell the advection object about the Riemann solver to use, and
             // then get it set up.
@@ -190,7 +257,8 @@ void RogersRicci1D::ExplicitTimeInt(
      * ndot = - (nu)' + n_star
      * udot = - u u' - tau T n'/n
      *
-     * n is DG, u is CG; Advect n only
+     * All terms other than the density source are handled by setting
+     * appropriate fluxes in the advection operation.
      */
 
     Array<OneD, NekDouble> n     = inarray[n_idx];
@@ -198,20 +266,17 @@ void RogersRicci1D::ExplicitTimeInt(
     Array<OneD, NekDouble> n_out = outarray[n_idx];
     Array<OneD, NekDouble> u_out = outarray[u_idx];
 
-    // Advect n only
-    Vmath::Vcopy(m_npts, u, 1, m_advVel[0], 1);
-    m_advObject->Advect(1, m_fields, m_advVel, inarray, outarray, time);
-    Vmath::Neg(m_npts, outarray[0], 1);
+    int nadvect = 2;
+    m_advObject->Advect(nadvect, m_fields, m_advVel, inarray, outarray, time);
+    for (auto ii = 0; ii < nadvect; ii++)
+    {
+        Vmath::Neg(m_npts, outarray[ii], 1);
+    }
 
-    Array<OneD, NekDouble> grad_n(m_npts), grad_u(m_npts);
-    m_fields[n_idx]->PhysDeriv(n, grad_n);
-    m_fields[u_idx]->PhysDeriv(u, grad_u);
-
+    // Add density source
     for (auto ii = 0; ii < m_npts; ii++)
     {
         n_out[ii] += this->n_star;
-        u_out[ii] =
-            -u[ii] * grad_u[ii] - this->tau * this->T * grad_n[ii] / n[ii];
     }
 }
 
@@ -221,29 +286,15 @@ void RogersRicci1D::DoOdeProjection(
 {
     int nvariables = inarray.size(), npoints = GetNpoints();
 
-    switch (m_projectionType)
+    for (int i = 0; i < nvariables; ++i)
     {
-        case MultiRegions::eDiscontinuous:
-        {
-            for (int i = 0; i < nvariables; ++i)
-            {
-                Vmath::Vcopy(npoints, inarray[i], 1, outarray[i], 1);
-            }
-            break;
-        }
-        case MultiRegions::eGalerkin:
-        {
-            int ncoeffs = m_fields[0]->GetNcoeffs();
-            Array<OneD, NekDouble> coeffs(ncoeffs, 0.0);
-            for (int i = 0; i < nvariables; ++i)
-            {
-                m_fields[i]->FwdTrans(inarray[i], coeffs);
-                m_fields[i]->BwdTrans(coeffs, outarray[i]);
-            }
-            break;
-        }
+        Vmath::Vcopy(npoints, inarray[i], 1, outarray[i], 1);
+        EquationSystem::SetBoundaryConditions(time);
     }
-    SetBoundaryConditions(outarray, time);
+
+    // TMP: Fix u at domain endpoints
+    outarray[1][0]           = -1.0;
+    outarray[1][npoints - 1] = 1.0;
 }
 
 /**
@@ -253,17 +304,19 @@ void RogersRicci1D::GetFluxVector(
     const Array<OneD, Array<OneD, NekDouble>> &physfield,
     Array<OneD, Array<OneD, Array<OneD, NekDouble>>> &flux)
 {
-    ASSERTL1(flux[0].size() == m_advVel.size(),
+    int ndims = flux[0].size();
+    ASSERTL1(ndims == m_advVel.size(),
              "Dimension of flux array and velocity array do not match");
 
     int nq = physfield[0].size();
 
-    for (int i = 0; i < flux.size(); ++i)
+    for (size_t p = 0; p < this->m_npts; ++p)
     {
-        for (int j = 0; j < flux[0].size(); ++j)
-        {
-            Vmath::Vmul(nq, physfield[i], 1, m_advVel[j], 1, flux[i][j], 1);
-        }
+        // Flux for the n eqn
+        flux[0][0][p] = physfield[0][p] * physfield[1][p];
+        // Flux for the u eqn
+        flux[1][0][p] = 0.5 * physfield[1][p] * physfield[1][p] +
+                        this->tau * this->T * std::log(physfield[0][p]);
     }
 }
 
@@ -282,14 +335,9 @@ Array<OneD, NekDouble> &RogersRicci1D::GetNormalVelocity()
     // Reset the normal velocity
     Vmath::Zero(nTracePts, m_traceVn, 1);
 
-    // Compute dot product of velocity along trace with trace normals. Store in
-    // m_traceVn.
-    for (int i = 0; i < m_advVel.size(); ++i)
+    for (int i = 0; i < nTracePts; ++i)
     {
-        m_fields[0]->ExtractTracePhys(m_advVel[i], tmp);
-
-        Vmath::Vvtvp(nTracePts, m_traceNormals[i], 1, tmp, 1, m_traceVn, 1,
-                     m_traceVn, 1);
+        m_traceVn[i] = m_traceNormals[0][i];
     }
 
     return m_traceVn;
