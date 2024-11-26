@@ -2,7 +2,7 @@
 // Lengths and resolutions in each dimension
 xsize = 2;
 xmin = -1;
-nx = 1000;
+nx = 40;
 //=============================================================================
 
 // Create a line in the x-direction of length <xsize>, with <nx> divisions
