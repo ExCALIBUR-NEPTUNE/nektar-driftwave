@@ -129,6 +129,7 @@ protected:
     int m_ndims;
 
 private:
+    int outflow_dim;
     NekDouble n_star;
     NekDouble tau;
     NekDouble T;
