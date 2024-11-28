@@ -64,6 +64,7 @@ public:
     {
         this->trace_pt_types = trace_pt_types;
     }
+
 protected:
     NekDouble calc_alpha(const NekDouble &u_L, const NekDouble &u_R,
                          const NekDouble &cs)
@@ -164,9 +165,27 @@ void RogersRicci1D::v_InitObject(bool DeclareField)
              "Incorrect number of variables detected (expected 2): check your "
              "session file.");
 
-    // Store mesh dimension for easy retrieval later.
+    // Store mesh dimension and label outflow direction
     m_ndims = m_graph->GetMeshDimension();
-    ASSERTL0(m_ndims == 1, "Eq sys only supports 1D mesh");
+    switch (m_ndims)
+    {
+        case 1:
+        {
+            this->outflow_dim = 0;
+            break;
+        }
+        case 3:
+        {
+            this->outflow_dim = 2;
+            break;
+        }
+        default:
+        {
+            ASSERTL0(false, className + "is only set up for 1 or 3 "
+                                        "dimensional meshes.");
+            break;
+        }
+    }
 
     m_intVariables = {n_idx, u_idx};
 
@@ -247,9 +266,9 @@ void RogersRicci1D::v_InitObject(bool DeclareField)
                                   m_implHelper);
     }
 
-    // Set up user-defined boundary conditions, if any were specified
-    // Also populate trace_pt_types array (passed to the riemann solver) and
-    // pt_types array (used in DoOdeProjection)
+    // Set up user-defined boundary conditions, if any were specified.
+    // Also populate trace_pt_types vector (passed to the riemann solver) and
+    // pt_types vector (used in DoOdeProjection)
     const Array<OneD, const int> &traceBndMap = m_fields[0]->GetTraceBndMap();
     Array<OneD, int> ElmtID, EdgeID;
     m_fields[0]->GetBoundaryToElmtMap(ElmtID, EdgeID);
@@ -258,11 +277,12 @@ void RogersRicci1D::v_InitObject(bool DeclareField)
         // Arrays of BCs for this field and corresponding expansion lists
         auto BCs     = m_fields[ifld]->GetBndConditions();
         auto BC_exps = m_fields[ifld]->GetBndCondExpansions();
-        int cnt      = 0;
+
+        int nExp_cumu = 0, nExp_cumu_non_periodic = 0;
         for (int region = 0; region < BCs.size(); ++region)
         {
-            auto BC_exp                               = BC_exps[region];
-            int nExp                                  = BC_exp->GetExpSize();
+            auto BC_exps_this_region = BC_exps[region];
+            int nExps_this_region    = BC_exps_this_region->GetExpSize();
             SpatialDomains::BoundaryConditionShPtr BC = BCs[region];
 
             // For all types other than periodic:
@@ -276,7 +296,7 @@ void RogersRicci1D::v_InitObject(bool DeclareField)
                     CustomBCsSharedPtr BCs_instance =
                         GetCustomBCsFactory().CreateInstance(
                             user_type, m_session, m_fields, m_traceNormals,
-                            ifld, m_spacedim, region, cnt, BC);
+                            ifld, m_spacedim, region, nExp_cumu, BC);
                     this->custom_BCs.push_back(BCs_instance);
 
                     // For outflow BCs type, label the appropriate trace pts and
@@ -296,51 +316,61 @@ void RogersRicci1D::v_InitObject(bool DeclareField)
                                                   ? eOutflowBdyLow
                                                   : eOutflowBdyHigh;
 
-                        for (int exp_idx = 0; exp_idx < nExp; ++exp_idx)
+                        // Loop over explists in this boundary region
+                        for (int iexp_in_region = 0;
+                             iexp_in_region < nExps_this_region;
+                             ++iexp_in_region)
                         {
-                            // Set label in global points array
-                            int bnd_cumu_idx_start = cnt + exp_idx;
-                            int npts = BC_exp->GetExp(exp_idx)->GetTotPoints();
 
-                            for (int iq = 0; iq < npts; iq++)
+                            // Index in the overall array of boundary explists
+                            int iexp = nExp_cumu + iexp_in_region;
+                            // Index in the overall array of boundary explists
+                            // excluding periodic BCs
+                            int iexp_np =
+                                nExp_cumu_non_periodic + iexp_in_region;
+                            // Number of points in this explist
+                            int npts_exp =
+                                BC_exps_this_region->GetExp(iexp_in_region)
+                                    ->GetTotPoints();
+
+                            // Get the element and edge IDs corresponding to
+                            // this explist
+                            int elementID = ElmtID[iexp];
+                            int edgeID    = EdgeID[iexp];
+                            auto element  = m_fields[ifld]->GetExp(elementID);
+
+                            /**
+                             * Find the first point of the element in the field
+                             * point arrays and use GetTracePhysMap() to
+                             * determine the relative indices of all points in
+                             * this edge. Label those indices as bdy points.
+                             */
+                            Array<OneD, int> rel_edge_pt_indices;
+                            element->GetTracePhysMap(edgeID,
+                                                     rel_edge_pt_indices);
+                            int element_start_idx =
+                                m_fields[ifld]->GetPhys_Offset(elementID);
+                            for (auto &edge_pt_idx : rel_edge_pt_indices)
                             {
-                                int bnd_cumu_idx = bnd_cumu_idx_start + iq;
-                                int foo          = traceBndMap[bnd_cumu_idx];
-                                int idx_in_trace =
-                                    m_fields[ifld]->GetTrace()->GetPhys_Offset(
-                                        foo);
-                                int elementID = ElmtID[bnd_cumu_idx];
-                                int edgeID    = EdgeID[bnd_cumu_idx];
-                                auto element =
-                                    m_fields[ifld]->GetExp(elementID);
-                                int npts_element = element->GetTotPoints();
-
-                                Array<OneD, int> edge_pt_indices;
-                                element->GetTracePhysMap(edgeID,
-                                                         edge_pt_indices);
-                                for (auto &edge_pt_idx : edge_pt_indices)
-                                {
-                                    int phys_idx =
-                                        m_fields[ifld]->GetPhys_Offset(
-                                            elementID) +
-                                        edge_pt_idx;
-                                    pt_types[phys_idx] = pt_type;
-                                }
+                                int phys_idx = element_start_idx + edge_pt_idx;
+                                pt_types[phys_idx] = pt_type;
                             }
-                            auto trace_bdy_map_offset =
-                                m_fields[0]->GetTrace()->GetPhys_Offset(
-                                    traceBndMap[cnt + exp_idx]);
-                            // Set outflow label for all of the pts
-                            for (int pt_idx = 0; pt_idx < npts; ++pt_idx)
+
+                            // Set outflow labels for trace points arrays
+                            int trace_offset =
+                                m_fields[ifld]->GetTrace()->GetPhys_Offset(
+                                    traceBndMap[iexp_np]);
+                            for (int pt_idx = 0; pt_idx < npts_exp; ++pt_idx)
                             {
-                                int trace_idx = trace_bdy_map_offset + pt_idx;
+                                int trace_idx = trace_offset + pt_idx;
                                 trace_pt_types[trace_idx] = pt_type;
                             }
                         }
                     }
                 }
-                cnt += nExp;
+                nExp_cumu_non_periodic += nExps_this_region;
             }
+            nExp_cumu += nExps_this_region;
         }
     }
 
@@ -425,10 +455,11 @@ void RogersRicci1D::GetFluxVector(
     for (size_t p = 0; p < this->m_npts; ++p)
     {
         // Flux for the n eqn
-        flux[0][0][p] = physfield[0][p] * physfield[1][p];
+        flux[0][this->outflow_dim][p] = physfield[0][p] * physfield[1][p];
         // Flux for the u eqn
-        flux[1][0][p] = 0.5 * physfield[1][p] * physfield[1][p] +
-                        this->tau * this->T * std::log(physfield[0][p]);
+        flux[1][this->outflow_dim][p] =
+            0.5 * physfield[1][p] * physfield[1][p] +
+            this->tau * this->T * std::log(physfield[0][p]);
     }
 }
 
@@ -457,27 +488,7 @@ Array<OneD, NekDouble> &RogersRicci1D::GetNormalVelocity()
 
 Array<OneD, NekDouble> &RogersRicci1D::GetOutflowTraceNormal()
 {
-    int flow_dir;
-    switch (m_ndims)
-    {
-        case 1:
-        {
-            flow_dir = 0;
-            break;
-        }
-        case 3:
-        {
-            flow_dir = 2;
-            break;
-        }
-        default:
-        {
-            ASSERTL0(false, "GetOutflowTraceNormal: Only set up for 1 or 3 "
-                            "dimensional meshes.");
-            break;
-        }
-    }
-    return m_traceNormals[flow_dir];
+    return m_traceNormals[this->outflow_dim];
 }
 
 void RogersRicci1D::SetBoundaryConditions(

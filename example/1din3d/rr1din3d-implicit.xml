@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<NEKTAR>
+    <COLLECTIONS DEFAULT="NoCollection" />
+    <EXPANSIONS>
+        <E COMPOSITE="C[0]" NUMMODES="4" TYPE="MODIFIED" FIELDS="n,u" />
+    </EXPANSIONS>
+
+    <CONDITIONS>
+        <SOLVERINFO>
+            <I PROPERTY="EQTYPE" VALUE="RogersRicci1D" />
+            <I PROPERTY="Projection"            VALUE="DisContinuous"        />
+            <I PROPERTY="AdvectionType"         VALUE="WeakDG"               />
+            <I PROPERTY="TimeIntegrationMethod" VALUE="ClassicalRungeKutta4" />
+            <I PROPERTY="UpwindType"            VALUE="CustomUpwind"            />
+
+        </SOLVERINFO>
+
+        <PARAMETERS>
+            <P> NumSteps       = 100000  </P>
+            <P> TimeStep       = 10.0/NumSteps </P>
+            <P> IO_InfoSteps   = NumSteps+1   </P>
+            <P> IO_CheckSteps  = NumSteps/100   </P>
+            <!-- ICs -->
+            <P> amp = 0.01 </P>
+            <P> width = 0.1 </P>
+            <!-- Model params -->
+            <P> nstar  = 2*0.03 </P>
+            <P> T  = 1.0        </P>
+            <P> tau  = 1.0        </P>
+            <!-- Derived params -->
+            <P> alpha = exp(-0.5/(tau*T))/(2*0.03) </P>
+        </PARAMETERS>
+
+        <VARIABLES>
+            <V ID="0"> n </V>
+            <V ID="1"> u </V>
+        </VARIABLES>
+
+        <BOUNDARYREGIONS>
+            <B ID="0"> C[1] </B> <!-- Low x -->
+            <B ID="1"> C[2] </B> <!-- High x -->
+            <B ID="2"> C[3] </B> <!-- Low y -->
+            <B ID="3"> C[4] </B> <!-- High y -->
+            <B ID="4"> C[5] </B> <!-- Low z -->
+            <B ID="5"> C[6] </B> <!-- High z -->
+        </BOUNDARYREGIONS>
+        <BOUNDARYCONDITIONS>
+            <!-- PBCs in x and y -->
+            <REGION REF="0">
+                <P VAR="n" VALUE="[1]" />
+                <P VAR="u" VALUE="[1]" />
+            </REGION>
+            <REGION REF="1">
+                <P VAR="n" VALUE="[0]" />
+                <P VAR="u" VALUE="[0]" />
+            </REGION>
+            <REGION REF="2">
+                <P VAR="n" VALUE="[3]" />
+                <P VAR="u" VALUE="[3]" />
+            </REGION>
+            <REGION REF="3">
+                <P VAR="n" VALUE="[2]" />
+                <P VAR="u" VALUE="[2]" />
+            </REGION>
+            <!-- Outflow BCsin z -->
+            <REGION REF="4">
+                <D VAR="n" USERDEFINEDTYPE="Outflow" VALUE="-1" />
+                <D VAR="u" VALUE="-sqrt(T)" />
+            </REGION>
+            <REGION REF="5">
+                <D VAR="n" USERDEFINEDTYPE="Outflow" VALUE="1" />
+                <D VAR="u" VALUE="sqrt(T)" />
+            </REGION>
+        </BOUNDARYCONDITIONS>
+
+        <FUNCTION NAME="InitialConditions">
+            <E VAR="n"   VALUE="nstar+amp*(1/sqrt(2*PI*width*width))*exp(-z*z/(2*width*width))" />
+            <E VAR="u" VALUE="z" />
+        </FUNCTION>
+    </CONDITIONS>
+</NEKTAR>

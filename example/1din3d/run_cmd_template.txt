@@ -1,0 +1,1 @@
+mpirun --bind-to hwthread -np <NMPI> <SOLVER_EXEC> rr1din3d-implicit.xml cuboid.xml
