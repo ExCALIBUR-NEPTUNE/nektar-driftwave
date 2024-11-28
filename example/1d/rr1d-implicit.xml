@@ -42,11 +42,11 @@
         </BOUNDARYREGIONS>
         <BOUNDARYCONDITIONS>
             <REGION REF="0">
-                <D VAR="n" VALUE="0" />
+                <D VAR="n" USERDEFINEDTYPE="Outflow" VALUE="-1" />
                 <D VAR="u" VALUE="-sqrt(T)" />
             </REGION>
             <REGION REF="1">
-                <D VAR="n" VALUE="0" />
+                <D VAR="n" USERDEFINEDTYPE="Outflow" VALUE="1" />
                 <D VAR="u" VALUE="sqrt(T)" />
             </REGION>
         </BOUNDARYCONDITIONS>

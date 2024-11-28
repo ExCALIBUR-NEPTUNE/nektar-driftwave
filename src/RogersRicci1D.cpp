@@ -60,58 +60,85 @@ public:
     {
     }
 
+    void set_pt_types(std::vector<TracePtType> trace_pt_types)
+    {
+        this->trace_pt_types = trace_pt_types;
+    }
 protected:
+    NekDouble calc_alpha(const NekDouble &u_L, const NekDouble &u_R,
+                         const NekDouble &cs)
+    {
+        NekDouble C_L = std::max(std::abs(u_L - cs), std::abs(u_L + cs));
+        NekDouble C_R = std::max(std::abs(u_R - cs), std::abs(u_R + cs));
+        return std::max(C_L, C_R);
+    }
+
+    NekDouble calc_trace_flux(const NekDouble &q_L, const NekDouble &q_R,
+                              const NekDouble &qF_L, const NekDouble &qF_R,
+                              const NekDouble &alpha, const NekDouble norm = 1)
+    {
+        return norm * 0.5 * (qF_L + qF_R) - 0.5 * alpha * (q_R - q_L);
+    }
+
     virtual void v_Solve(
         const int nDim, const Array<OneD, const Array<OneD, NekDouble>> &Fwd,
         const Array<OneD, const Array<OneD, NekDouble>> &Bwd,
         Array<OneD, Array<OneD, NekDouble>> &flux) override final
     {
-        for (int j = 0; j < Fwd[0].size(); ++j)
+
+        ASSERTL0(CheckScalars("flow_trace_norm"),
+                 "flow_trace_norm array not defined.");
+        const Array<OneD, NekDouble> &flow_norms =
+            m_scalars["flow_trace_norm"]();
+
+        const int n_idx       = 0;
+        const int u_idx       = 1;
+        const int n_trace_pts = Fwd[0].size();
+        ASSERTL0(this->trace_pt_types.size() == n_trace_pts,
+                 "trace_pt_types vector has the wrong number of points");
+
+        // Isothermal for now
+        NekDouble T = 1.0;
+
+        for (int j = 0; j < n_trace_pts; ++j)
         {
-            // Field variables
-            NekDouble n_L = Fwd[0][j];
-            NekDouble u_L = Fwd[1][j];
-            NekDouble n_R = Bwd[0][j];
-            NekDouble u_R = Bwd[1][j];
+            // Extract variables
+            NekDouble n_L = Fwd[n_idx][j];
+            NekDouble u_L = Fwd[u_idx][j];
+            NekDouble n_R = Bwd[n_idx][j];
+            NekDouble u_R = Bwd[u_idx][j];
 
-            // const temperature == c_s
-            NekDouble T = 1.0;
+            // Set sound speed
+            NekDouble cs = sqrt(T);
 
-            // sound speed
-            NekDouble a = sqrt(T);
-
-            if (j == 0)
+            // Special handling for boundary points
+            if (this->trace_pt_types[j] == eOutflowBdyLow)
             {
-                n_R = n_L;  // zero Neumann
-                u_R = -1.0; // Dirichlet
+                n_R = n_L;  // (zero Neumann)
+                u_R = -1.0; // (Dirichlet)
             }
-            else if (j == 1)
+            else if (this->trace_pt_types[j] == eOutflowBdyHigh)
             {
-                n_R = n_L; // zero Neumann
-                u_R = 1.0; // Dirichlet
+                n_R = n_L; // (zero Neumann)
+                u_R = 1.0; // (Dirichlet)
             }
 
+            // Compute left and right state fluxes, accounting for grad(P) term
             NekDouble flux_n_L = n_L * u_L;
             NekDouble flux_n_R = n_R * u_R;
             NekDouble flux_u_L = 0.5 * u_L * u_L + T * log(n_L);
             NekDouble flux_u_R = 0.5 * u_R * u_R + T * log(n_R);
 
-            NekDouble C_L   = std::max(std::abs(u_L - a), std::abs(u_L + a));
-            NekDouble C_R   = std::max(std::abs(u_R - a), std::abs(u_R + a));
-            NekDouble alpha = std::max(C_L, C_R);
-
-            flux[0][j] =
-                0.5 * (flux_n_L + flux_n_R) - 0.5 * alpha * (n_R - n_L);
-            flux[1][j] =
-                0.5 * (flux_u_L + flux_u_R) - 0.5 * alpha * (u_R - u_L);
-
-            if (j == 0)
-            {
-                flux[0][j] *= -1.0;
-                flux[1][j] *= -1.0;
-            }
+            NekDouble alpha = calc_alpha(u_L, u_R, cs);
+            flux[n_idx][j]  = calc_trace_flux(n_L, n_R, flux_n_L, flux_n_R,
+                                             alpha, flow_norms[j]);
+            flux[u_idx][j]  = calc_trace_flux(u_L, u_R, flux_u_L, flux_u_R,
+                                             alpha, flow_norms[j]);
         }
     }
+
+private:
+    std::vector<TracePtType> trace_pt_types;
 };
 
 std::string CustomUpwindSolver::solver_name =
@@ -160,8 +187,11 @@ void RogersRicci1D::v_InitObject(bool DeclareField)
             // Define the normal velocity fields.
             if (m_fields[0]->GetTrace())
             {
-                m_traceVn = Array<OneD, NekDouble>(GetTraceNpoints());
+                int nTrace           = GetTraceNpoints();
+                m_traceVn            = Array<OneD, NekDouble>(nTrace);
+                this->trace_pt_types = std::vector(nTrace, eNormalPt);
             }
+            this->pt_types = std::vector(m_npts, eNormalPt);
 
             // The remainder of this code is fairly generic boilerplate for the
             // DG setup.
@@ -188,9 +218,8 @@ void RogersRicci1D::v_InitObject(bool DeclareField)
             m_session->LoadSolverInfo("UpwindType", riemName, "Upwind");
             m_riemannSolver =
                 GetRiemannSolverFactory().CreateInstance(riemName, m_session);
-            // m_riemannSolver->SetScalar("Vn",
-            // &RogersRicci1D::GetNormalVelocity,
-            //                            this);
+            m_riemannSolver->SetScalar(
+                "flow_trace_norm", &RogersRicci1D::GetOutflowTraceNormal, this);
 
             // Tell the advection object about the Riemann solver to use, and
             // then get it set up.
@@ -219,30 +248,104 @@ void RogersRicci1D::v_InitObject(bool DeclareField)
     }
 
     // Set up user-defined boundary conditions, if any were specified
+    // Also populate trace_pt_types array (passed to the riemann solver) and
+    // pt_types array (used in DoOdeProjection)
+    const Array<OneD, const int> &traceBndMap = m_fields[0]->GetTraceBndMap();
+    Array<OneD, int> ElmtID, EdgeID;
+    m_fields[0]->GetBoundaryToElmtMap(ElmtID, EdgeID);
     for (int ifld = 0; ifld < m_fields.size(); ifld++)
     {
-        int cnt = 0;
-        for (int icnd = 0; icnd < m_fields[ifld]->GetBndConditions().size();
-             ++icnd)
+        // Arrays of BCs for this field and corresponding expansion lists
+        auto BCs     = m_fields[ifld]->GetBndConditions();
+        auto BC_exps = m_fields[ifld]->GetBndCondExpansions();
+        int cnt      = 0;
+        for (int region = 0; region < BCs.size(); ++region)
         {
-            SpatialDomains::BoundaryConditionShPtr cnd =
-                m_fields[ifld]->GetBndConditions()[icnd];
-            if (cnd->GetBoundaryConditionType() != SpatialDomains::ePeriodic)
+            auto BC_exp                               = BC_exps[region];
+            int nExp                                  = BC_exp->GetExpSize();
+            SpatialDomains::BoundaryConditionShPtr BC = BCs[region];
+
+            // For all types other than periodic:
+            if (BC->GetBoundaryConditionType() != SpatialDomains::ePeriodic)
             {
-                std::string type = cnd->GetUserDefined();
-                if (!type.empty())
+                // For user-defined BC types, intantiate and add to the
+                // class-level BCs array
+                std::string user_type = BC->GetUserDefined();
+                if (!user_type.empty())
                 {
                     CustomBCsSharedPtr BCs_instance =
                         GetCustomBCsFactory().CreateInstance(
-                            type, m_session, m_fields, m_traceNormals, ifld,
-                            m_spacedim, icnd, cnt, cnd);
+                            user_type, m_session, m_fields, m_traceNormals,
+                            ifld, m_spacedim, region, cnt, BC);
                     this->custom_BCs.push_back(BCs_instance);
+
+                    // For outflow BCs type, label the appropriate trace pts and
+                    // regular field pts as outflow
+                    if (user_type == "Outflow")
+                    {
+                        // Use Dirichlet "equation" (VALUE string) to identify
+                        // which outflow boundary we're on
+                        auto dirichlet_bc = std::static_pointer_cast<
+                            SpatialDomains::DirichletBoundaryCondition>(BC);
+                        ASSERTL0(dirichlet_bc,
+                                 "Expected 'Outflow' BCs to have type "
+                                 "Dirichlet");
+                        LibUtilities::Equation eqn =
+                            dirichlet_bc->m_dirichletCondition;
+                        TracePtType pt_type = eqn.Evaluate() < 0
+                                                  ? eOutflowBdyLow
+                                                  : eOutflowBdyHigh;
+
+                        for (int exp_idx = 0; exp_idx < nExp; ++exp_idx)
+                        {
+                            // Set label in global points array
+                            int bnd_cumu_idx_start = cnt + exp_idx;
+                            int npts = BC_exp->GetExp(exp_idx)->GetTotPoints();
+
+                            for (int iq = 0; iq < npts; iq++)
+                            {
+                                int bnd_cumu_idx = bnd_cumu_idx_start + iq;
+                                int foo          = traceBndMap[bnd_cumu_idx];
+                                int idx_in_trace =
+                                    m_fields[ifld]->GetTrace()->GetPhys_Offset(
+                                        foo);
+                                int elementID = ElmtID[bnd_cumu_idx];
+                                int edgeID    = EdgeID[bnd_cumu_idx];
+                                auto element =
+                                    m_fields[ifld]->GetExp(elementID);
+                                int npts_element = element->GetTotPoints();
+
+                                Array<OneD, int> edge_pt_indices;
+                                element->GetTracePhysMap(edgeID,
+                                                         edge_pt_indices);
+                                for (auto &edge_pt_idx : edge_pt_indices)
+                                {
+                                    int phys_idx =
+                                        m_fields[ifld]->GetPhys_Offset(
+                                            elementID) +
+                                        edge_pt_idx;
+                                    pt_types[phys_idx] = pt_type;
+                                }
+                            }
+                            auto trace_bdy_map_offset =
+                                m_fields[0]->GetTrace()->GetPhys_Offset(
+                                    traceBndMap[cnt + exp_idx]);
+                            // Set outflow label for all of the pts
+                            for (int pt_idx = 0; pt_idx < npts; ++pt_idx)
+                            {
+                                int trace_idx = trace_bdy_map_offset + pt_idx;
+                                trace_pt_types[trace_idx] = pt_type;
+                            }
+                        }
+                    }
                 }
-                cnt +=
-                    m_fields[ifld]->GetBndCondExpansions()[icnd]->GetExpSize();
+                cnt += nExp;
             }
         }
     }
+
+    std::dynamic_pointer_cast<CustomUpwindSolver>(this->m_riemannSolver)
+        ->set_pt_types(this->trace_pt_types);
 }
 
 /**
@@ -284,17 +387,26 @@ void RogersRicci1D::DoOdeProjection(
     const Array<OneD, const Array<OneD, NekDouble>> &inarray,
     Array<OneD, Array<OneD, NekDouble>> &outarray, const NekDouble time)
 {
-    int nvariables = inarray.size(), npoints = GetNpoints();
+    int nvariables = inarray.size();
 
     for (int i = 0; i < nvariables; ++i)
     {
-        Vmath::Vcopy(npoints, inarray[i], 1, outarray[i], 1);
-        EquationSystem::SetBoundaryConditions(time);
+        Vmath::Vcopy(m_npts, inarray[i], 1, outarray[i], 1);
     }
+    EquationSystem::SetBoundaryConditions(time);
 
-    // TMP: Fix u at domain endpoints
-    outarray[1][0]           = -1.0;
-    outarray[1][npoints - 1] = 1.0;
+    // Fix u for points on the outflow boundaries
+    for (auto jj = 0; jj < m_npts; jj++)
+    {
+        if (this->pt_types[jj] == eOutflowBdyLow)
+        {
+            outarray[this->u_idx][jj] = -1.0;
+        }
+        else if (this->pt_types[jj] == eOutflowBdyHigh)
+        {
+            outarray[this->u_idx][jj] = 1.0;
+        }
+    }
 }
 
 /**
@@ -341,6 +453,31 @@ Array<OneD, NekDouble> &RogersRicci1D::GetNormalVelocity()
     }
 
     return m_traceVn;
+}
+
+Array<OneD, NekDouble> &RogersRicci1D::GetOutflowTraceNormal()
+{
+    int flow_dir;
+    switch (m_ndims)
+    {
+        case 1:
+        {
+            flow_dir = 0;
+            break;
+        }
+        case 3:
+        {
+            flow_dir = 2;
+            break;
+        }
+        default:
+        {
+            ASSERTL0(false, "GetOutflowTraceNormal: Only set up for 1 or 3 "
+                            "dimensional meshes.");
+            break;
+        }
+    }
+    return m_traceNormals[flow_dir];
 }
 
 void RogersRicci1D::SetBoundaryConditions(

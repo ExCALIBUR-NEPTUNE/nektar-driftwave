@@ -47,6 +47,14 @@ using namespace Nektar::SolverUtils;
 namespace Nektar
 {
 
+// Enum used to identify trace points on outflow boundaries
+enum TracePtType
+{
+    eOutflowBdyLow,
+    eOutflowBdyHigh,
+    eNormalPt,
+};
+
 /**
  * @brief Equation system for 1D, reduced R&R.
  */
@@ -113,6 +121,8 @@ protected:
                        Array<OneD, Array<OneD, Array<OneD, NekDouble>>> &flux);
 
     Array<OneD, NekDouble> &GetNormalVelocity();
+
+    Array<OneD, NekDouble> &GetOutflowTraceNormal();
     void SetBoundaryConditions(Array<OneD, Array<OneD, NekDouble>> &physarray,
                                NekDouble time);
     int m_npts;
@@ -125,6 +135,12 @@ private:
 
     /// User defined boundary conditions
     std::vector<CustomBCsSharedPtr> custom_BCs;
+
+    // Point types in trace arrays
+    std::vector<TracePtType> trace_pt_types;
+
+    // Point types in field arrays
+    std::vector<TracePtType> pt_types;
 };
 
 } // namespace Nektar
