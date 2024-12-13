@@ -10,15 +10,16 @@
             <I PROPERTY="EQTYPE" VALUE="RogersRicci1D" />
             <I PROPERTY="Projection"            VALUE="DisContinuous"        />
             <I PROPERTY="AdvectionType"         VALUE="WeakDG"               />
-            <I PROPERTY="TimeIntegrationMethod" VALUE="ClassicalRungeKutta4" />
+            <I PROPERTY="TimeIntegrationMethod" VALUE="DIRKOrder2" />
+            <I PROPERTY="AdvectionAdvancement"  VALUE="Implicit" />
             <I PROPERTY="UpwindType"            VALUE="CustomUpwind"            />
 
         </SOLVERINFO>
 
         <PARAMETERS>
-            <P> NumSteps       = 100000  </P>
+            <P> NumSteps       = 10000  </P>
             <P> TimeStep       = 10.0/NumSteps </P>
-            <P> IO_InfoSteps   = NumSteps+1   </P>
+            <P> IO_InfoSteps   = NumSteps/100   </P>
             <P> IO_CheckSteps  = NumSteps/100   </P>
             <!-- ICs -->
             <P> amp = 0.01 </P>

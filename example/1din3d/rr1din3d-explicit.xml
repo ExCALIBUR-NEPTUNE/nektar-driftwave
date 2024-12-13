@@ -10,16 +10,15 @@
             <I PROPERTY="EQTYPE" VALUE="RogersRicci1D" />
             <I PROPERTY="Projection"            VALUE="DisContinuous"        />
             <I PROPERTY="AdvectionType"         VALUE="WeakDG"               />
-            <I PROPERTY="TimeIntegrationMethod" VALUE="DIRKOrder2" />
-            <I PROPERTY="AdvectionAdvancement"  VALUE="Implicit" />
+            <I PROPERTY="TimeIntegrationMethod" VALUE="ClassicalRungeKutta4" />
             <I PROPERTY="UpwindType"            VALUE="CustomUpwind"            />
 
         </SOLVERINFO>
 
         <PARAMETERS>
-            <P> NumSteps       = 10000  </P>
+            <P> NumSteps       = 100000  </P>
             <P> TimeStep       = 10.0/NumSteps </P>
-            <P> IO_InfoSteps   = NumSteps/100   </P>
+            <P> IO_InfoSteps   = NumSteps+1   </P>
             <P> IO_CheckSteps  = NumSteps/100   </P>
             <!-- ICs -->
             <P> amp = 0.01 </P>
@@ -38,28 +37,45 @@
         </VARIABLES>
 
         <BOUNDARYREGIONS>
-            <B ID="0"> C[1] </B>
-            <B ID="1"> C[2] </B>
+            <B ID="0"> C[1] </B> <!-- Low x -->
+            <B ID="1"> C[2] </B> <!-- High x -->
+            <B ID="2"> C[3] </B> <!-- Low y -->
+            <B ID="3"> C[4] </B> <!-- High y -->
+            <B ID="4"> C[5] </B> <!-- Low z -->
+            <B ID="5"> C[6] </B> <!-- High z -->
         </BOUNDARYREGIONS>
         <BOUNDARYCONDITIONS>
+            <!-- PBCs in x and y -->
             <REGION REF="0">
+                <P VAR="n" VALUE="[1]" />
+                <P VAR="u" VALUE="[1]" />
+            </REGION>
+            <REGION REF="1">
+                <P VAR="n" VALUE="[0]" />
+                <P VAR="u" VALUE="[0]" />
+            </REGION>
+            <REGION REF="2">
+                <P VAR="n" VALUE="[3]" />
+                <P VAR="u" VALUE="[3]" />
+            </REGION>
+            <REGION REF="3">
+                <P VAR="n" VALUE="[2]" />
+                <P VAR="u" VALUE="[2]" />
+            </REGION>
+            <!-- Outflow BCsin z -->
+            <REGION REF="4">
                 <D VAR="n" USERDEFINEDTYPE="Outflow" VALUE="-1" />
                 <D VAR="u" VALUE="-sqrt(T)" />
             </REGION>
-            <REGION REF="1">
+            <REGION REF="5">
                 <D VAR="n" USERDEFINEDTYPE="Outflow" VALUE="1" />
                 <D VAR="u" VALUE="sqrt(T)" />
             </REGION>
         </BOUNDARYCONDITIONS>
 
-        <!-- <FUNCTION NAME="ExactSolution">
-            <E VAR="n"   VALUE="(nstar/sqrt(T))*(1+sqrt(1-x*x))" />
-            <E VAR="u" VALUE="(sqrt(T)/x)*(1-sqrt(1-x*x))" />
-        </FUNCTION> -->
-
         <FUNCTION NAME="InitialConditions">
-            <E VAR="n"   VALUE="nstar+amp*(1/sqrt(2*PI*width*width))*exp(-x*x/(2*width*width))" />
-            <E VAR="u" VALUE="x" />
+            <E VAR="n"   VALUE="nstar+amp*(1/sqrt(2*PI*width*width))*exp(-z*z/(2*width*width))" />
+            <E VAR="u" VALUE="z" />
         </FUNCTION>
     </CONDITIONS>
 </NEKTAR>
